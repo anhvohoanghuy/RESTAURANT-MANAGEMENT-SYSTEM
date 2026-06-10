@@ -9,37 +9,41 @@ import com.example.feat1.DDD.identity_context.domain.repository.credential.ICred
 import com.example.feat1.DDD.identity_context.domain.repository.role.IRoleDomainRepository;
 import com.example.feat1.DDD.identity_context.domain.repository.user.IUserDomainRepository;
 import com.example.feat1.DDD.identity_context.domain.service.UserDomainService;
-import com.example.feat1.DDD.identity_context.infastructure.entity.UserRoleEntity;
-import com.example.feat1.DDD.identity_context.infastructure.mapper.UserMapper;
-import com.example.feat1.DDD.identity_context.infastructure.repository.ICredentialRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
-
+@Service
 @Transactional
 @RequiredArgsConstructor
 public class RegisterUserUseCase {
-    private final UserDomainService userDomainService;
-    private final IUserDomainRepository userDomainRepository;
-    private final IRoleDomainRepository roleDomainRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final ICredentialDomainRepository credentialDomainRepository;
+  private final UserDomainService userDomainService;
+  private final IUserDomainRepository userDomainRepository;
+  private final IRoleDomainRepository roleDomainRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final ICredentialDomainRepository credentialDomainRepository;
 
-    public void execute(RegisterRequestDto requestDto) {
-        User user = User.register(requestDto.getUsername(), requestDto.getPassword());
-        userDomainService.validateUser(user);
+  public void execute(RegisterRequestDto requestDto) {
+    User user = User.register(requestDto.getUsername(), requestDto.getEmail());
+    userDomainService.validateUser(user);
 
-        requestDto.getRoles().forEach(roleName -> {
-            RoleEnum roleEnum = RoleEnum.fromName(roleName);
-            Role role = roleDomainRepository.findReferenceById(roleEnum.getId());
-            user.assignRole(role);
-        });
-        userDomainRepository.save(user);
+    requestDto
+        .getRoles()
+        .forEach(
+            roleName -> {
+              RoleEnum roleEnum = RoleEnum.fromName(roleName);
+              Role role = roleDomainRepository.findReferenceById(roleEnum.getId());
+              user.assignRole(role);
+            });
+    userDomainRepository.save(user);
 
-        Credential credential = Credential.create(user.getId(), requestDto.getLoginType(), requestDto.getProviderUserId(), passwordEncoder.encode(requestDto.getPassword()));
-        credentialDomainRepository.save(credential);
-    }
+    Credential credential =
+        Credential.create(
+            user.getId(),
+            requestDto.getLoginType(),
+            requestDto.getProviderUserId(),
+            passwordEncoder.encode(requestDto.getPassword()));
+    credentialDomainRepository.save(credential);
+  }
 }

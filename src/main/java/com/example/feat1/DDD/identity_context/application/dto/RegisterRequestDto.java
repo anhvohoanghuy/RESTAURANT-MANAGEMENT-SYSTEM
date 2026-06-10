@@ -1,16 +1,15 @@
 package com.example.feat1.DDD.identity_context.application.dto;
 
 import com.example.feat1.DDD.identity_context.domain.model.enums.AuthProvider;
-import lombok.Data;
-
 import java.util.List;
+import lombok.Data;
 
 @Data
 public class RegisterRequestDto {
-    String username;
-    String email;
-    String password;
-    String providerUserId;
-    AuthProvider loginType;
-    List<String> Roles;
+  private String username;
+  private String email;
+  private String password;
+  private String providerUserId;
+  private AuthProvider loginType;
+  private List<String> roles;
 }

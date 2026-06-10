@@ -5,10 +5,10 @@ import com.example.feat1.DDD.auth.application.dto.AuthResponse;
 import org.springframework.stereotype.Component;
 
 @Component("GOOGLE")
-public class GoogleAuthProvider implements IAuthProvider{
+public class GoogleAuthProvider implements IAuthProvider {
 
-    @Override
-    public AuthResponse authenticate(AuthRequest authRequest) {
-        return null;
-    }
+  @Override
+  public AuthResponse authenticate(AuthRequest authRequest) {
+    throw new UnsupportedOperationException("Google authentication is not implemented yet");
+  }
 }

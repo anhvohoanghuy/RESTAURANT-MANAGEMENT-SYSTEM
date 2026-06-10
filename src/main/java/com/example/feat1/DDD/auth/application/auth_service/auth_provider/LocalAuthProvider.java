@@ -1,13 +1,41 @@
 package com.example.feat1.DDD.auth.application.auth_service.auth_provider;
 
+import com.example.feat1.DDD.auth.TokenSerivce;
 import com.example.feat1.DDD.auth.application.dto.AuthRequest;
 import com.example.feat1.DDD.auth.application.dto.AuthResponse;
+import com.example.feat1.DDD.identity_context.domain.model.aggregate.User;
+import com.example.feat1.DDD.identity_context.domain.model.entity.Credential;
+import com.example.feat1.DDD.identity_context.domain.model.enums.AuthProvider;
+import com.example.feat1.DDD.identity_context.domain.repository.credential.ICredentialDomainRepository;
+import com.example.feat1.DDD.identity_context.domain.repository.user.IUserDomainRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component("LOCAL")
-public class LocalAuthProvider implements IAuthProvider{
-    @Override
-    public AuthResponse authenticate(AuthRequest authRequest) {
-        return null;
+@RequiredArgsConstructor
+public class LocalAuthProvider implements IAuthProvider {
+  private final ICredentialDomainRepository credentialDomainRepository;
+  private final IUserDomainRepository userDomainRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final TokenSerivce tokenSerivce;
+
+  @Override
+  public AuthResponse authenticate(AuthRequest authRequest) {
+    Credential credential =
+        credentialDomainRepository
+            .findByProviderAndProviderUserId(AuthProvider.LOCAL, authRequest.getUsername())
+            .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+
+    if (!passwordEncoder.matches(authRequest.getPassword(), credential.getPasswordHash())) {
+      throw new RuntimeException("Invalid username or password");
     }
+
+    User user =
+        userDomainRepository
+            .findByIdWithRoles(credential.getUserId())
+            .orElseThrow(() -> new RuntimeException("User not found"));
+
+    return tokenSerivce.generateAccessToken(user);
+  }
 }

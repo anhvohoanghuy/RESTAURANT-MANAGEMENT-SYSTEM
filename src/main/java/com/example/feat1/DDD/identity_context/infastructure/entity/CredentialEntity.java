@@ -4,11 +4,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,16 +16,14 @@ import java.util.UUID;
 @Table(name = "credentials")
 public class CredentialEntity {
 
-    @Id
-    private UUID id;
+  @Id private UUID id;
 
-    private UUID userId;
+  private UUID userId;
 
-    @Column(nullable = false, unique = true)
-    private String providerUserId;
+  @Column(nullable = false, unique = true)
+  private String providerUserId;
 
-    private String passwordHash;
+  private String passwordHash;
 
-    private String authProvider;
-
+  private String authProvider;
 }

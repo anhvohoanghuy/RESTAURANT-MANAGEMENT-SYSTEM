@@ -8,7 +8,6 @@ import com.example.feat1.DDD.identity_context.infastructure.entity.PermissionEnt
 import com.example.feat1.DDD.identity_context.infastructure.entity.RoleEntity;
 import com.example.feat1.DDD.identity_context.infastructure.entity.UserEntity;
 import com.example.feat1.DDD.identity_context.infastructure.entity.UserRoleEntity;
-
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
@@ -16,156 +15,143 @@ import java.util.stream.Collectors;
 
 public class UserMapper {
 
-    // =====================================================
-    // USER
-    // =====================================================
+  // =====================================================
+  // USER
+  // =====================================================
 
-    public static Optional<User> userToDomain(UserEntity entity) {
-        if (entity == null) {
-            return Optional.empty();
-        }
-
-        return Optional.of(
-                new User(
-                        entity.getId(),
-                        entity.getName(),
-                        entity.getEmail(),
-                        userRolesToDomain(entity.getUserRoles())
-                )
-        );
+  public static Optional<User> userToDomain(UserEntity entity) {
+    if (entity == null) {
+      return Optional.empty();
     }
 
-    public static UserEntity userToEntity(User user) {
-        if (user == null) {
-            return null;
-        }
+    return Optional.of(
+        new User(
+            entity.getId(),
+            entity.getName(),
+            entity.getEmail(),
+            userRolesToDomain(entity.getUserRoles())));
+  }
 
-        UserEntity entity = new UserEntity();
-        entity.setId(user.getId());
-        entity.setName(user.getName());
-        entity.setEmail(user.getEmail());
-        entity.setUserRoles(userRolesToEntity(user.getUserRoles(), entity));
-
-        return entity;
+  public static UserEntity userToEntity(User user) {
+    if (user == null) {
+      return null;
     }
 
-    // =====================================================
-    // USER ROLE
-    // =====================================================
+    UserEntity entity = new UserEntity();
+    entity.setId(user.getId());
+    entity.setName(user.getName());
+    entity.setEmail(user.getEmail());
+    entity.setUserRoles(userRolesToEntity(user.getUserRoles(), entity));
 
-    public static Set<UserRole> userRolesToDomain(Set<UserRoleEntity> entities) {
-        if (entities == null || entities.isEmpty()) {
-            return Collections.emptySet();
-        }
+    return entity;
+  }
 
-        return entities.stream()
-                .map(UserMapper::userRoleToDomain)
-                .collect(Collectors.toSet());
+  // =====================================================
+  // USER ROLE
+  // =====================================================
+
+  public static Set<UserRole> userRolesToDomain(Set<UserRoleEntity> entities) {
+    if (entities == null || entities.isEmpty()) {
+      return Collections.emptySet();
     }
 
-    public static UserRole userRoleToDomain(UserRoleEntity entity) {
-        if (entity == null) {
-            return null;
-        }
+    return entities.stream().map(UserMapper::userRoleToDomain).collect(Collectors.toSet());
+  }
 
-        return new UserRole(
-                entity.getId(),
-                null, // tránh circular mapping User -> UserRole -> User
-                roleToDomain(entity.getRole())
-        );
+  public static UserRole userRoleToDomain(UserRoleEntity entity) {
+    if (entity == null) {
+      return null;
     }
 
-    public static Set<UserRoleEntity> userRolesToEntity(
-            Set<UserRole> userRoles,
-            UserEntity userEntity
-    ) {
-        if (userRoles == null || userRoles.isEmpty()) {
-            return Collections.emptySet();
-        }
+    return new UserRole(
+        entity.getId(),
+        null, // tránh circular mapping User -> UserRole -> User
+        roleToDomain(entity.getRole()));
+  }
 
-        return userRoles.stream()
-                .map(userRole -> userRoleToEntity(userRole, userEntity))
-                .collect(Collectors.toSet());
+  public static Set<UserRoleEntity> userRolesToEntity(
+      Set<UserRole> userRoles, UserEntity userEntity) {
+    if (userRoles == null || userRoles.isEmpty()) {
+      return Collections.emptySet();
     }
 
-    public static UserRoleEntity userRoleToEntity(
-            UserRole userRole,
-            UserEntity userEntity
-    ) {
-        if (userRole == null) {
-            return null;
-        }
+    return userRoles.stream()
+        .map(userRole -> userRoleToEntity(userRole, userEntity))
+        .collect(Collectors.toSet());
+  }
 
-        UserRoleEntity entity = new UserRoleEntity();
-        entity.setId(userRole.getId());
-        entity.setUser(userEntity);
-        entity.setRole(roleToEntity(userRole.getRole()));
-
-        return entity;
+  public static UserRoleEntity userRoleToEntity(UserRole userRole, UserEntity userEntity) {
+    if (userRole == null) {
+      return null;
     }
 
-    // =====================================================
-    // ROLE
-    // =====================================================
+    UserRoleEntity entity = new UserRoleEntity();
+    entity.setId(userRole.getId());
+    entity.setUser(userEntity);
+    entity.setRole(roleToEntity(userRole.getRole()));
 
-    public static Role roleToDomain(RoleEntity entity) {
-        if (entity == null) {
-            return null;
-        }
+    return entity;
+  }
 
-        return new Role(
-                entity.getId(),
-                entity.getName()
-        );
+  // =====================================================
+  // ROLE
+  // =====================================================
+
+  public static Role roleToDomain(RoleEntity entity) {
+    if (entity == null) {
+      return null;
     }
 
-    public static RoleEntity roleToEntity(Role role) {
-        if (role == null) {
-            return null;
-        }
+    return new Role(
+        entity.getId(),
+        entity.getName(),
+        entity.getRolePermissions() == null
+            ? Collections.emptySet()
+            : entity.getRolePermissions().stream()
+                .map(rolePermission -> rolePermission.getPermission())
+                .map(permission -> new Permission(permission.getId(), permission.getCode()))
+                .collect(Collectors.toSet()));
+  }
 
-        RoleEntity entity = new RoleEntity();
-        entity.setId(role.getId());
-        entity.setName(role.getName());
-
-        return entity;
+  public static RoleEntity roleToEntity(Role role) {
+    if (role == null) {
+      return null;
     }
 
-    // =====================================================
-    // PERMISSION
-    // =====================================================
+    RoleEntity entity = new RoleEntity();
+    entity.setId(role.getId());
+    entity.setName(role.getName());
 
-    public static Set<Permission> permissionsToDomain(
-            Set<PermissionEntity> entities
-    ) {
-        if (entities == null || entities.isEmpty()) {
-            return Collections.emptySet();
-        }
+    return entity;
+  }
 
-        return entities.stream()
-                .map(permission ->
-                        new Permission(
-                                permission.getId(),
-                                permission.getCode()
-                        )
-                )
-                .collect(Collectors.toSet());
+  // =====================================================
+  // PERMISSION
+  // =====================================================
+
+  public static Set<Permission> permissionsToDomain(Set<PermissionEntity> entities) {
+    if (entities == null || entities.isEmpty()) {
+      return Collections.emptySet();
     }
 
-    public static Set<PermissionEntity> permissionsToEntity(
-            Set<Permission> permissions
-    ) {
-        if (permissions == null || permissions.isEmpty()) {
-            return Collections.emptySet();
-        }
+    return entities.stream()
+        .map(permission -> new Permission(permission.getId(), permission.getCode()))
+        .collect(Collectors.toSet());
+  }
 
-        return permissions.stream()
-                .map(permission ->
-                        new PermissionEntity(
-                                permission.getId(),
-                                permission.getCode()
-                        )
-                )
-                .collect(Collectors.toSet());
+  public static Set<PermissionEntity> permissionsToEntity(Set<Permission> permissions) {
+    if (permissions == null || permissions.isEmpty()) {
+      return Collections.emptySet();
     }
+
+    return permissions.stream()
+        .map(
+            permission -> {
+              PermissionEntity entity = new PermissionEntity();
+              entity.setId(permission.getId());
+              entity.setCode(permission.getCode());
+              return entity;
+            })
+        .collect(Collectors.toSet());
+  }
 }
