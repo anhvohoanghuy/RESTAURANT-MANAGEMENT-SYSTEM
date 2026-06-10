@@ -2,30 +2,31 @@
 
 ## Overview
 
-Add a Menu Context to the existing Spring Boot authentication and identity backend so clients can request a permission-aware navigation tree for the current authenticated user.
+Replace the previous permission-navigation menu direction with a Restaurant Menu Context for a sales catalog. The backend manages menu categories, dishes, topping groups, topping options, and recipes, and exposes a public read API for currently sellable menu data.
 
 ## Phases
 
-- [ ] **Phase 01: menu-context** - Add permission-aware backend menu tree API.
+- [x] **Phase 01: menu-context** - Add restaurant menu catalog CRUD and public read API. Completed: 2026-06-10
 
 ## Phase Details
 
 ### Phase 01: menu-context
-**Goal**: Add a backend Menu Context that models navigational menu items, associates them with existing permissions, and exposes an authenticated endpoint that returns only the menu entries available to the current user.
+**Goal**: Add a backend Restaurant Menu Context that models categories, dishes, topping groups, topping options, and recipes; provides admin CRUD for catalog management; and exposes a public menu tree containing only active sellable data.
 **Depends on**: Nothing (first phase)
 **Requirements**: [MENU-001, MENU-002, MENU-003, MENU-004, MENU-005]
 **Success Criteria** (what must be TRUE):
-  1. Authenticated users can call `GET /menus/me`.
-  2. The response contains a deterministic menu tree.
-  3. The response excludes inactive and unauthorized menu entries.
-  4. Focused tests cover filtering, tree assembly, and endpoint authorization.
+  1. Admin users can manage categories, dishes, topping groups, topping options, and recipes under `/admin/menu/**`.
+  2. Public clients can call `GET /menus/public` to retrieve the active catalog.
+  3. Public responses are category -> dish -> topping group -> topping option trees and exclude inactive or archived sellable data.
+  4. Recipes can be stored for dishes and topping options, but recipes are not exposed by the public menu response.
+  5. Focused tests cover lifecycle filtering, topping selection validation, recipe line validation, and public response shape.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01: Implement Menu Context vertical slice
+- [x] 01-01: Implement Restaurant Menu Context vertical slice
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 01. menu-context | 0/1 | Planned | - |
+| 01. menu-context | 1/1 | Complete | 2026-06-10 |

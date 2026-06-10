@@ -3,6 +3,7 @@ package com.example.feat1.DDD.auth.infrastructure.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -27,6 +28,8 @@ public class SecurityConfig {
                 auth.requestMatchers("/auth/**")
                     .permitAll()
                     .requestMatchers("/api/auth/**")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/menus/public")
                     .permitAll()
                     .requestMatchers("/admin/**")
                     .hasRole("ADMIN")

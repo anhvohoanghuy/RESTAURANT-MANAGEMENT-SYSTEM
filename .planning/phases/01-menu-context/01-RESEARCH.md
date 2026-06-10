@@ -2,39 +2,36 @@
 
 ## Research Complete
 
-The existing project is a Spring Boot 4 / Java 17 backend with Spring Security, JPA, MySQL, and a DDD-inspired package structure. A Menu Context should follow the current style instead of introducing a new framework.
+The existing project is a Spring Boot 4 / Java 17 backend with Spring Security, Spring Data JPA, MySQL runtime configuration, and H2 test configuration. The Restaurant Menu Context can be implemented with the existing stack and DDD-inspired package layout.
 
 ## Recommended Approach
 
-1. Model menus as a simple adjacency list.
-   - Store `parent_id` on each menu item.
-   - Query active rows, sort them, and assemble the tree in application code.
-   - This keeps the first slice simple and avoids recursive SQL or closure tables.
+1. Model the catalog explicitly.
+   - Categories contain dishes.
+   - Dishes contain topping groups.
+   - Topping groups contain topping options.
+   - Recipes attach separately to either a dish or a topping option.
 
-2. Bind visibility to permission codes.
-   - Existing roles already carry permissions in the identity domain model.
-   - Menu filtering can compare each menu item's optional `permissionCode` against the current user's authorities or permission collection.
-   - Public-to-authenticated menu items should use a null permission binding.
+2. Keep lifecycle filtering simple.
+   - Store lifecycle status as an enum string.
+   - Query public data by `ACTIVE`.
+   - Keep admin archive operations as status changes rather than hard deletes.
 
-3. Expose a current-user menu endpoint.
-   - `GET /menus/me` avoids accepting an arbitrary user id from clients.
-   - The controller can use the Spring Security principal, then delegate to an application service.
-   - Return DTOs, not entities or domain aggregates.
+3. Keep public API recipe-free.
+   - Public menu DTOs should include prices and topping choices.
+   - Recipe lines remain admin/internal data because they expose operational kitchen details.
 
-4. Keep CRUD out of the first phase.
-   - Seed data or repository fixtures are enough to prove the read/filter path.
-   - Admin management can be a follow-up phase once the menu model is stable.
+4. Use existing route security.
+   - `/admin/**` already requires `ROLE_ADMIN`.
+   - Add a narrow public permit rule for `GET /menus/public`.
 
 ## Codebase Considerations
 
-- `SecurityConfig` already protects non-auth routes and registers `JwtAuthenticationFilter`.
-- `CustomUserDetails` and role/permission mapping should be inspected during implementation to decide whether permission codes are best read from authorities or from the loaded domain user.
-- Existing packages use `infastructure` in the identity context. Do not rename that during this phase.
-- `pom.xml` already includes H2 and Spring Security test dependencies, so focused tests can be added without new dependencies.
+- Existing packages contain a misspelled `infastructure` in identity context; new menu context can use the conventional `infrastructure` package without renaming existing code.
+- The Maven wrapper script has a local PowerShell issue, but Maven can be run directly from the cached wrapper distribution when `JAVA_HOME` points to `C:\Users\chinh\.jdks\ms-17.0.19`.
+- Tests should avoid pulling Redis/security context unless they specifically need it.
 
 ## Risks
 
-- Current authentication setup may still have unresolved compile or runtime issues. Menu endpoint tests should isolate where possible.
-- If `Role` permissions are not fully fetched by the existing query, filtering by permission may require updating fetch joins.
-- Menu tree assembly must avoid leaking children whose parent is hidden.
-
+- Full application context tests may be affected by unrelated auth/Redis configuration.
+- Spring Data derived queries over relationships should use explicit nested property names such as `Category_Id` and `ToppingGroup_Id`.

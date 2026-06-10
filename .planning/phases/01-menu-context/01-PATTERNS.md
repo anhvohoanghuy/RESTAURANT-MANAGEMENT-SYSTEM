@@ -2,82 +2,52 @@
 
 ## Pattern Mapping Complete
 
-This file captures local code patterns the executor must follow while implementing the Menu Context.
-
 ## Package And Layering Pattern
 
 Use the existing DDD-inspired package shape:
 
-- Domain model: `src/main/java/com/example/feat1/DDD/{context}/domain/model/...`
-- Domain repository interface: `src/main/java/com/example/feat1/DDD/{context}/domain/repository/...`
-- Application service/use case: `src/main/java/com/example/feat1/DDD/{context}/application/...`
-- Infrastructure entity/repository/mapper/presentation: `src/main/java/com/example/feat1/DDD/{context}/infrastructure/...`
-
-Existing analogs:
-
-- `src/main/java/com/example/feat1/DDD/identity_context/domain/model/entity/Role.java`
-- `src/main/java/com/example/feat1/DDD/identity_context/domain/repository/user/IUserDomainRepository.java`
-- `src/main/java/com/example/feat1/DDD/identity_context/domain/repository/user/UserDomainRepository.java`
-- `src/main/java/com/example/feat1/DDD/identity_context/infastructure/repository/IUserRepository.java`
+- Domain model: `src/main/java/com/example/feat1/DDD/menu_context/domain/model/...`
+- Application service and DTOs: `src/main/java/com/example/feat1/DDD/menu_context/application/...`
+- Infrastructure entity/repository/presentation: `src/main/java/com/example/feat1/DDD/menu_context/infrastructure/...`
 
 ## Persistence Pattern
 
-Use Spring Data JPA repositories and a domain-facing adapter. The adapter should map JPA entities into domain objects before the application service receives them.
+Use Spring Data JPA repositories directly behind the application service for this vertical catalog slice. Entities should use explicit table names:
 
-Existing analog:
+- `MenuCategoryEntity` -> `menu_categories`
+- `DishEntity` -> `dishes`
+- `ToppingGroupEntity` -> `topping_groups`
+- `ToppingOptionEntity` -> `topping_options`
+- `RecipeEntity` -> `recipes`
+- `RecipeLineEntity` -> `recipe_lines`
 
-- `UserDomainRepository` delegates to `IUserRepository` and maps with `UserMapper`.
-- `CredentialRepository` delegates to `ICredentialRepository` and maps with `CredentialMapper`.
+Use `@Enumerated(EnumType.STRING)` for lifecycle and recipe target enums.
 
-Recommended menu equivalents:
+## API Pattern
 
-- `IMenuItemDomainRepository`
-- `MenuItemDomainRepository`
-- `IMenuItemRepository` or `JpaMenuItemRepository`
-- `MenuItemMapper`
+Existing controllers use constructor injection, `@RestController`, `@RequestMapping`, and `ResponseEntity`.
 
-## Security Principal Pattern
+Endpoints for this phase:
 
-Current `CustomUserDetails` contains:
-
-- `UUID id`
-- `String email`
-- `String password`
-- `Set<String> roles`
-
-Current `getAuthorities()` returns only `ROLE_` authorities. Menu filtering needs permission codes, so implementation must either:
-
-- extend `CustomUserDetails` with `Set<String> permissionCodes`, or
-- query the current user with roles and permissions inside the menu query path.
-
-The cleaner path for this phase is extending `CustomUserDetails` with permission codes while preserving the existing `ROLE_` authorities.
-
-Existing analogs:
-
-- `src/main/java/com/example/feat1/DDD/auth/infrastructure/security/CustomUserDetails.java`
-- `src/main/java/com/example/feat1/DDD/auth/infrastructure/service/CustomUserDetailsService.java`
-- `src/main/java/com/example/feat1/DDD/identity_context/domain/model/entity/Role.java`
-
-## Controller Pattern
-
-Existing controllers use constructor injection and Spring MVC annotations:
-
-- `AuthController` uses `@RestController`, `@RequestMapping`, `@PostMapping`, and `ResponseEntity`.
-- `UserController` exposes user lookup through a presentation package.
-
-Recommended endpoint:
-
-- `GET /menus/me`
-- Use `@AuthenticationPrincipal CustomUserDetails principal`.
-- Return `ResponseEntity<List<MenuItemResponse>>`.
+- `GET /menus/public`
+- `POST /admin/menu/categories`
+- `PUT /admin/menu/categories/{id}`
+- `DELETE /admin/menu/categories/{id}` for archive
+- `POST /admin/menu/dishes`
+- `PUT /admin/menu/dishes/{id}`
+- `DELETE /admin/menu/dishes/{id}` for archive
+- `POST /admin/menu/topping-groups`
+- `POST /admin/menu/topping-options`
+- `DELETE /admin/menu/topping-options/{id}` for archive
+- `PUT /admin/menu/recipes`
+- `GET /admin/menu/recipes?targetType=...&targetId=...`
 
 ## Test Pattern
 
-The project already has:
+Use focused tests:
 
-- H2 test dependency.
-- Spring Security test dependency.
-- `src/test/resources/application.properties`.
+- Plain unit tests for domain validation.
+- Mocked repository tests for application service public tree assembly.
+- Standalone MockMvc tests for controller response shape.
 
-Add focused tests before relying on full application integration because auth flows are still being stabilized.
-
+Avoid full Spring context tests for this phase unless needed; unrelated Redis/security setup can obscure catalog failures.

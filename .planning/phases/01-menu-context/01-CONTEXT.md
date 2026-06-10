@@ -1,96 +1,64 @@
 # Phase 01: Menu Context - Context
 
 **Gathered:** 2026-06-10
-**Status:** Ready for planning
-**Source:** GSD fallback context from `PROJECT_CONTEXT.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `TASKS.md`, and source inspection
+**Status:** Ready for execution
+**Source:** User-provided redesign plan and source inspection
 
 <domain>
 ## Phase Boundary
 
-Build a new Menu Context for the Spring Boot backend. The feature provides a permission-aware navigation menu API for authenticated users.
+Build a Restaurant Menu Context for the Spring Boot backend. This phase is a sales catalog slice, not a permission-aware navigation menu.
 
 In scope:
-- Add menu domain model and JPA persistence.
-- Represent parent/child menu hierarchy.
-- Bind menu entries to existing permission codes where needed.
-- Return the current user's allowed menu tree through a protected endpoint.
-- Add tests around filtering, tree assembly, and endpoint access.
+- Add menu category, dish, topping group, topping option, recipe, and recipe line models.
+- Persist catalog data through Spring Data JPA.
+- Use lifecycle states `ACTIVE`, `INACTIVE`, and `ARCHIVED`.
+- Expose admin endpoints under `/admin/menu/**`.
+- Expose public/client read endpoint `GET /menus/public`.
+- Ensure public responses include only active sellable data and never include recipes.
 
 Out of scope:
+- Order, cart, payment, inventory costing, yield, waste, and stock deduction.
+- Generating SKUs or variants from topping combinations.
 - Frontend rendering.
-- Admin CRUD for managing menu records.
-- A broad package rename from `infastructure` to `infrastructure`.
-- Refresh token, logout, OAuth, and registration work unless directly needed by tests.
 </domain>
 
 <decisions>
 ## Implementation Decisions
 
 ### Bounded Context Placement
-- **D-01:** Add menu code under `src/main/java/com/example/feat1/DDD/menu_context/` and mirror the existing DDD-inspired layering: domain, application, infrastructure, presentation.
+- **D-01:** Add restaurant menu code under `src/main/java/com/example/feat1/DDD/menu_context/`.
 
-### Persistence Strategy
-- **D-02:** Use Spring Data JPA and MySQL-compatible entities, matching the existing persistence approach.
+### Catalog Model
+- **D-02:** Model dishes as belonging to categories. Model configurable toppings as groups under a dish and options under each group.
 
-### Permission Binding
-- **D-03:** A menu item may reference a permission code. If the permission code is null or blank, the item is visible to any authenticated user. If the permission code is present, it is visible only when the authenticated user's roles expose that permission code.
+### Lifecycle
+- **D-03:** Use `ACTIVE`, `INACTIVE`, and `ARCHIVED`. Public menu queries only return active categories, active dishes, and active topping options.
+
+### Recipe Ownership
+- **D-04:** Recipes attach to either a dish or a topping option through `targetType` and `targetId`. Recipe lines contain ingredient, quantity, unit, and sort order.
 
 ### API Shape
-- **D-04:** Expose a read endpoint for the current user's menu, preferably `GET /menus/me`, protected by the existing JWT security filter. Return DTOs from this endpoint, not domain aggregates.
+- **D-05:** Public read uses `GET /menus/public`. Admin writes use `/admin/menu/**` so existing `/admin/**` security covers them.
 
-### Hierarchy Rules
-- **D-05:** Return a stable tree ordered by a numeric sort order and then by label for deterministic responses. If a parent is not visible, its children must not leak through the returned tree.
-
-### Testing Scope
-- **D-06:** Include unit tests for tree assembly and permission filtering. Include a controller/security test proving anonymous calls are rejected and authenticated users receive filtered menus.
-
-### the agent's Discretion
-- Exact DTO class names.
-- Whether the use case is named `GetCurrentUserMenuUseCase`, `MenuQueryService`, or similar.
-- Seed data mechanism for local development.
+### Public Data Contract
+- **D-06:** Public response shape is category -> dishes -> topping groups -> topping options. It excludes recipes and internal recipe lines.
 </decisions>
 
 <canonical_refs>
 ## Canonical References
 
-Downstream agents MUST read these before planning or implementing.
-
-### Project Context
-- `PROJECT_CONTEXT.md` - current stack, implemented features, and known gaps.
-- `ARCHITECTURE.md` - package layout and DDD-style layering.
-- `DECISIONS.md` - accepted and pending architecture decisions.
-- `TASKS.md` - existing stabilization backlog.
-
-### Source Areas
-- `src/main/java/com/example/feat1/DDD/auth/infrastructure/security/SecurityConfig.java` - current authorization rules and JWT filter wiring.
-- `src/main/java/com/example/feat1/DDD/auth/infrastructure/security/JwtAuthenticationFilter.java` - current authenticated principal setup.
-- `src/main/java/com/example/feat1/DDD/auth/infrastructure/security/CustomUserDetails.java` - available current-user details and authorities.
-- `src/main/java/com/example/feat1/DDD/auth/infrastructure/service/CustomUserDetailsService.java` - user loading for security.
-- `src/main/java/com/example/feat1/DDD/identity_context/domain/model/entity/Permission.java` - existing permission domain model.
-- `src/main/java/com/example/feat1/DDD/identity_context/domain/model/entity/Role.java` - existing role and permission relationship.
-- `src/main/java/com/example/feat1/DDD/identity_context/infastructure/repository/IUserRepository.java` - current role-fetching query pattern.
+- `pom.xml` - Spring Boot, JPA, web, security, H2 test dependencies.
+- `src/main/java/com/example/feat1/DDD/auth/infrastructure/security/SecurityConfig.java` - route authorization rules.
+- `src/main/java/com/example/feat1/DDD/identity_context/infastructure/entity/UserEntity.java` - local JPA style.
+- `src/main/java/com/example/feat1/DDD/identity_context/infastructure/presentation/UserController.java` - controller style.
 </canonical_refs>
 
 <specifics>
 ## Specific Ideas
 
-- Use `MenuItem` as the domain object and `MenuItemEntity` as the JPA entity.
-- Useful fields: `id`, `parentId`, `label`, `path`, `icon`, `permissionCode`, `sortOrder`, `active`.
-- The endpoint should not expose inactive menu items.
-- The response should be recursive: each menu DTO may include `children`.
-- Tests can use H2 and Spring Security test support already declared in `pom.xml`.
+- Tables: `menu_categories`, `dishes`, `topping_groups`, `topping_options`, `recipes`, `recipe_lines`.
+- Dish pricing is `basePrice`.
+- Topping option pricing is `additionalPrice`.
+- Future order pricing can calculate `basePrice + selected topping additionalPrice`, but that is not implemented in this phase.
 </specifics>
-
-<deferred>
-## Deferred Ideas
-
-- Admin endpoints to create, update, reorder, and disable menu entries.
-- Role-specific menu overrides beyond permission filtering.
-- Caching menu trees in Redis.
-- UI-specific localization of menu labels.
-</deferred>
-
----
-
-*Phase: 01-menu-context*
-*Context gathered: 2026-06-10 via GSD fallback plan-phase*
