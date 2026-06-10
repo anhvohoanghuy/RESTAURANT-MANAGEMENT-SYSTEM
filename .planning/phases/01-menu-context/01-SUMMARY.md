@@ -31,6 +31,8 @@ metrics:
 - Added domain validation for category, dish, topping group, topping option, recipe, and recipe line objects.
 - Added JPA entities and Spring Data repositories for `menu_categories`, `dishes`, `topping_groups`, `topping_options`, `recipes`, and `recipe_lines`.
 - Added `MenuCatalogService` for admin catalog management, recipe upsert/read, and public active menu tree assembly.
+- Refactored `MenuCatalogService` to depend on domain repository ports instead of Spring Data JPA repositories.
+- Added infrastructure repository adapters and entity-domain mapper so persistence remains outside the domain/application boundary.
 - Added `PublicMenuController` with `GET /menus/public`.
 - Added `AdminMenuController` under `/admin/menu/**`.
 - Updated `SecurityConfig` to permit only `GET /menus/public` while keeping `/admin/**` role-protected.
@@ -43,4 +45,4 @@ metrics:
 
 ## Self-Check
 
-PASSED. Focused tests and full test suite pass.
+PASSED. Focused tests and full test suite pass after the DDD repository refactor.

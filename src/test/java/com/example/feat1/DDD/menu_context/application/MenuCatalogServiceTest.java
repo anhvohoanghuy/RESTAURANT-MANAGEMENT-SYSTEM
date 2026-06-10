@@ -8,20 +8,19 @@ import static org.mockito.Mockito.when;
 
 import com.example.feat1.DDD.menu_context.application.dto.MenuDtos.PublicMenuResponse;
 import com.example.feat1.DDD.menu_context.application.dto.MenuDtos.RecipeRequest;
+import com.example.feat1.DDD.menu_context.domain.model.Dish;
+import com.example.feat1.DDD.menu_context.domain.model.MenuCategory;
 import com.example.feat1.DDD.menu_context.domain.model.MenuStatus;
+import com.example.feat1.DDD.menu_context.domain.model.Recipe;
 import com.example.feat1.DDD.menu_context.domain.model.RecipeLine;
 import com.example.feat1.DDD.menu_context.domain.model.RecipeTargetType;
 import com.example.feat1.DDD.menu_context.domain.model.ToppingGroup;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.DishEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.MenuCategoryEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.RecipeEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.ToppingGroupEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.ToppingOptionEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.DishRepository;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.MenuCategoryRepository;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.RecipeRepository;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.ToppingGroupRepository;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.ToppingOptionRepository;
+import com.example.feat1.DDD.menu_context.domain.model.ToppingOption;
+import com.example.feat1.DDD.menu_context.domain.repository.DishDomainRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.MenuCategoryDomainRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.RecipeDomainRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.ToppingGroupDomainRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.ToppingOptionDomainRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -30,20 +29,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class MenuCatalogServiceTest {
-  private MenuCategoryRepository categoryRepository;
-  private DishRepository dishRepository;
-  private ToppingGroupRepository toppingGroupRepository;
-  private ToppingOptionRepository toppingOptionRepository;
-  private RecipeRepository recipeRepository;
+  private MenuCategoryDomainRepository categoryRepository;
+  private DishDomainRepository dishRepository;
+  private ToppingGroupDomainRepository toppingGroupRepository;
+  private ToppingOptionDomainRepository toppingOptionRepository;
+  private RecipeDomainRepository recipeRepository;
   private MenuCatalogService service;
 
   @BeforeEach
   void setUp() {
-    categoryRepository = mock(MenuCategoryRepository.class);
-    dishRepository = mock(DishRepository.class);
-    toppingGroupRepository = mock(ToppingGroupRepository.class);
-    toppingOptionRepository = mock(ToppingOptionRepository.class);
-    recipeRepository = mock(RecipeRepository.class);
+    categoryRepository = mock(MenuCategoryDomainRepository.class);
+    dishRepository = mock(DishDomainRepository.class);
+    toppingGroupRepository = mock(ToppingGroupDomainRepository.class);
+    toppingOptionRepository = mock(ToppingOptionDomainRepository.class);
+    recipeRepository = mock(RecipeDomainRepository.class);
     service =
         new MenuCatalogService(
             categoryRepository,
@@ -58,21 +57,19 @@ class MenuCatalogServiceTest {
     UUID categoryId = UUID.randomUUID();
     UUID dishId = UUID.randomUUID();
     UUID groupId = UUID.randomUUID();
-    MenuCategoryEntity category = category(categoryId, "Pho", MenuStatus.ACTIVE, 1);
-    DishEntity dish = dish(dishId, category, "Pho Bo", MenuStatus.ACTIVE, 1);
-    ToppingGroupEntity group = group(groupId, dish, "Herbs", 0, 2, 1);
-    ToppingOptionEntity option =
-        option(UUID.randomUUID(), group, "Bean sprouts", MenuStatus.ACTIVE, 1);
+    MenuCategory category = new MenuCategory(categoryId, "Pho", null, 1, MenuStatus.ACTIVE);
+    Dish dish =
+        new Dish(
+            dishId, categoryId, "Pho Bo", "Dish", BigDecimal.valueOf(65000), MenuStatus.ACTIVE, 1);
+    ToppingGroup group = new ToppingGroup(groupId, dishId, "Herbs", 0, 2, 1);
+    ToppingOption option =
+        new ToppingOption(
+            UUID.randomUUID(), groupId, "Bean sprouts", BigDecimal.ZERO, MenuStatus.ACTIVE, 1);
 
-    when(categoryRepository.findByStatusOrderBySortOrderAscNameAsc(MenuStatus.ACTIVE))
-        .thenReturn(List.of(category));
-    when(dishRepository.findByCategory_IdInAndStatusOrderBySortOrderAscNameAsc(
-            List.of(categoryId), MenuStatus.ACTIVE))
-        .thenReturn(List.of(dish));
-    when(toppingGroupRepository.findByDish_IdInOrderBySortOrderAscNameAsc(List.of(dishId)))
-        .thenReturn(List.of(group));
-    when(toppingOptionRepository.findByToppingGroup_IdInAndStatusOrderBySortOrderAscNameAsc(
-            List.of(groupId), MenuStatus.ACTIVE))
+    when(categoryRepository.findActiveOrdered()).thenReturn(List.of(category));
+    when(dishRepository.findActiveByCategoryIds(List.of(categoryId))).thenReturn(List.of(dish));
+    when(toppingGroupRepository.findByDishIds(List.of(dishId))).thenReturn(List.of(group));
+    when(toppingOptionRepository.findActiveByToppingGroupIds(List.of(groupId)))
         .thenReturn(List.of(option));
 
     PublicMenuResponse menu = service.getPublicMenu();
@@ -108,11 +105,28 @@ class MenuCatalogServiceTest {
   void dishAndToppingCanHaveSeparateRecipes() {
     UUID dishId = UUID.randomUUID();
     UUID optionId = UUID.randomUUID();
-    when(dishRepository.findById(dishId)).thenReturn(Optional.of(new DishEntity()));
+    when(dishRepository.findById(dishId))
+        .thenReturn(
+            Optional.of(
+                new Dish(
+                    dishId,
+                    UUID.randomUUID(),
+                    "Milk Tea",
+                    null,
+                    BigDecimal.valueOf(45000),
+                    MenuStatus.ACTIVE,
+                    1)));
     when(toppingOptionRepository.findById(optionId))
-        .thenReturn(Optional.of(new ToppingOptionEntity()));
-    when(recipeRepository.findByTargetTypeAndTargetId(any(), any())).thenReturn(Optional.empty());
-    when(recipeRepository.save(any(RecipeEntity.class)))
+        .thenReturn(
+            Optional.of(
+                new ToppingOption(
+                    optionId,
+                    UUID.randomUUID(),
+                    "Black pearl",
+                    BigDecimal.valueOf(7000),
+                    MenuStatus.ACTIVE,
+                    1)));
+    when(recipeRepository.save(any(Recipe.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
     var dishRecipe =
@@ -134,51 +148,5 @@ class MenuCatalogServiceTest {
     assertThat(toppingRecipe.targetType()).isEqualTo(RecipeTargetType.TOPPING_OPTION);
     assertThat(dishRecipe.lines()).hasSize(1);
     assertThat(toppingRecipe.lines()).hasSize(1);
-  }
-
-  private MenuCategoryEntity category(UUID id, String name, MenuStatus status, int sortOrder) {
-    MenuCategoryEntity entity = new MenuCategoryEntity();
-    entity.setId(id);
-    entity.setName(name);
-    entity.setStatus(status);
-    entity.setSortOrder(sortOrder);
-    return entity;
-  }
-
-  private DishEntity dish(
-      UUID id, MenuCategoryEntity category, String name, MenuStatus status, int sortOrder) {
-    DishEntity entity = new DishEntity();
-    entity.setId(id);
-    entity.setCategory(category);
-    entity.setName(name);
-    entity.setDescription("Dish");
-    entity.setBasePrice(BigDecimal.valueOf(65000));
-    entity.setStatus(status);
-    entity.setSortOrder(sortOrder);
-    return entity;
-  }
-
-  private ToppingGroupEntity group(
-      UUID id, DishEntity dish, String name, int minSelections, int maxSelections, int sortOrder) {
-    ToppingGroupEntity entity = new ToppingGroupEntity();
-    entity.setId(id);
-    entity.setDish(dish);
-    entity.setName(name);
-    entity.setMinSelections(minSelections);
-    entity.setMaxSelections(maxSelections);
-    entity.setSortOrder(sortOrder);
-    return entity;
-  }
-
-  private ToppingOptionEntity option(
-      UUID id, ToppingGroupEntity group, String name, MenuStatus status, int sortOrder) {
-    ToppingOptionEntity entity = new ToppingOptionEntity();
-    entity.setId(id);
-    entity.setToppingGroup(group);
-    entity.setName(name);
-    entity.setAdditionalPrice(BigDecimal.ZERO);
-    entity.setStatus(status);
-    entity.setSortOrder(sortOrder);
-    return entity;
   }
 }

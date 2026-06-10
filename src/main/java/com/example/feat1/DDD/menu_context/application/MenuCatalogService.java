@@ -23,17 +23,11 @@ import com.example.feat1.DDD.menu_context.domain.model.RecipeLine;
 import com.example.feat1.DDD.menu_context.domain.model.RecipeTargetType;
 import com.example.feat1.DDD.menu_context.domain.model.ToppingGroup;
 import com.example.feat1.DDD.menu_context.domain.model.ToppingOption;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.DishEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.MenuCategoryEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.RecipeEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.RecipeLineEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.ToppingGroupEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.entity.ToppingOptionEntity;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.DishRepository;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.MenuCategoryRepository;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.RecipeRepository;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.ToppingGroupRepository;
-import com.example.feat1.DDD.menu_context.infrastructure.repository.ToppingOptionRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.DishDomainRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.MenuCategoryDomainRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.RecipeDomainRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.ToppingGroupDomainRepository;
+import com.example.feat1.DDD.menu_context.domain.repository.ToppingOptionDomainRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Comparator;
 import java.util.List;
@@ -47,11 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MenuCatalogService {
-  private final MenuCategoryRepository categoryRepository;
-  private final DishRepository dishRepository;
-  private final ToppingGroupRepository toppingGroupRepository;
-  private final ToppingOptionRepository toppingOptionRepository;
-  private final RecipeRepository recipeRepository;
+  private final MenuCategoryDomainRepository categoryRepository;
+  private final DishDomainRepository dishRepository;
+  private final ToppingGroupDomainRepository toppingGroupRepository;
+  private final ToppingOptionDomainRepository toppingOptionRepository;
+  private final RecipeDomainRepository recipeRepository;
 
   @Transactional
   public CategoryResponse createCategory(CategoryRequest request) {
@@ -62,17 +56,12 @@ public class MenuCatalogService {
             request.description(),
             defaultInt(request.sortOrder()),
             request.status());
-    MenuCategoryEntity entity = new MenuCategoryEntity();
-    entity.setName(category.getName());
-    entity.setDescription(category.getDescription());
-    entity.setSortOrder(category.getSortOrder());
-    entity.setStatus(category.getStatus());
-    return toCategoryResponse(categoryRepository.save(entity));
+    return toCategoryResponse(categoryRepository.save(category));
   }
 
   @Transactional
   public CategoryResponse updateCategory(UUID id, CategoryRequest request) {
-    MenuCategoryEntity entity = findCategory(id);
+    findCategory(id);
     MenuCategory category =
         new MenuCategory(
             id,
@@ -80,18 +69,20 @@ public class MenuCatalogService {
             request.description(),
             defaultInt(request.sortOrder()),
             request.status());
-    entity.setName(category.getName());
-    entity.setDescription(category.getDescription());
-    entity.setSortOrder(category.getSortOrder());
-    entity.setStatus(category.getStatus());
-    return toCategoryResponse(categoryRepository.save(entity));
+    return toCategoryResponse(categoryRepository.save(category));
   }
 
   @Transactional
   public CategoryResponse archiveCategory(UUID id) {
-    MenuCategoryEntity entity = findCategory(id);
-    entity.setStatus(MenuStatus.ARCHIVED);
-    return toCategoryResponse(categoryRepository.save(entity));
+    MenuCategory category = findCategory(id);
+    return toCategoryResponse(
+        categoryRepository.save(
+            new MenuCategory(
+                category.getId(),
+                category.getName(),
+                category.getDescription(),
+                category.getSortOrder(),
+                MenuStatus.ARCHIVED)));
   }
 
   @Transactional
@@ -105,19 +96,13 @@ public class MenuCatalogService {
             request.basePrice(),
             request.status(),
             defaultInt(request.sortOrder()));
-    DishEntity entity = new DishEntity();
-    entity.setCategory(findCategory(dish.getCategoryId()));
-    entity.setName(dish.getName());
-    entity.setDescription(dish.getDescription());
-    entity.setBasePrice(dish.getBasePrice());
-    entity.setStatus(dish.getStatus());
-    entity.setSortOrder(dish.getSortOrder());
-    return toDishResponse(dishRepository.save(entity));
+    findCategory(dish.getCategoryId());
+    return toDishResponse(dishRepository.save(dish));
   }
 
   @Transactional
   public DishResponse updateDish(UUID id, DishRequest request) {
-    DishEntity entity = findDish(id);
+    findDish(id);
     Dish dish =
         new Dish(
             id,
@@ -127,20 +112,23 @@ public class MenuCatalogService {
             request.basePrice(),
             request.status(),
             defaultInt(request.sortOrder()));
-    entity.setCategory(findCategory(dish.getCategoryId()));
-    entity.setName(dish.getName());
-    entity.setDescription(dish.getDescription());
-    entity.setBasePrice(dish.getBasePrice());
-    entity.setStatus(dish.getStatus());
-    entity.setSortOrder(dish.getSortOrder());
-    return toDishResponse(dishRepository.save(entity));
+    findCategory(dish.getCategoryId());
+    return toDishResponse(dishRepository.save(dish));
   }
 
   @Transactional
   public DishResponse archiveDish(UUID id) {
-    DishEntity entity = findDish(id);
-    entity.setStatus(MenuStatus.ARCHIVED);
-    return toDishResponse(dishRepository.save(entity));
+    Dish dish = findDish(id);
+    return toDishResponse(
+        dishRepository.save(
+            new Dish(
+                dish.getId(),
+                dish.getCategoryId(),
+                dish.getName(),
+                dish.getDescription(),
+                dish.getBasePrice(),
+                MenuStatus.ARCHIVED,
+                dish.getSortOrder())));
   }
 
   @Transactional
@@ -153,13 +141,8 @@ public class MenuCatalogService {
             defaultInt(request.minSelections()),
             defaultInt(request.maxSelections()),
             defaultInt(request.sortOrder()));
-    ToppingGroupEntity entity = new ToppingGroupEntity();
-    entity.setDish(findDish(group.getDishId()));
-    entity.setName(group.getName());
-    entity.setMinSelections(group.getMinSelections());
-    entity.setMaxSelections(group.getMaxSelections());
-    entity.setSortOrder(group.getSortOrder());
-    return toGroupResponse(toppingGroupRepository.save(entity));
+    findDish(group.getDishId());
+    return toGroupResponse(toppingGroupRepository.save(group));
   }
 
   @Transactional
@@ -172,20 +155,22 @@ public class MenuCatalogService {
             request.additionalPrice(),
             request.status(),
             defaultInt(request.sortOrder()));
-    ToppingOptionEntity entity = new ToppingOptionEntity();
-    entity.setToppingGroup(findGroup(option.getToppingGroupId()));
-    entity.setName(option.getName());
-    entity.setAdditionalPrice(option.getAdditionalPrice());
-    entity.setStatus(option.getStatus());
-    entity.setSortOrder(option.getSortOrder());
-    return toOptionResponse(toppingOptionRepository.save(entity));
+    findGroup(option.getToppingGroupId());
+    return toOptionResponse(toppingOptionRepository.save(option));
   }
 
   @Transactional
   public ToppingOptionResponse archiveToppingOption(UUID id) {
-    ToppingOptionEntity entity = findOption(id);
-    entity.setStatus(MenuStatus.ARCHIVED);
-    return toOptionResponse(toppingOptionRepository.save(entity));
+    ToppingOption option = findOption(id);
+    return toOptionResponse(
+        toppingOptionRepository.save(
+            new ToppingOption(
+                option.getId(),
+                option.getToppingGroupId(),
+                option.getName(),
+                option.getAdditionalPrice(),
+                MenuStatus.ARCHIVED,
+                option.getSortOrder())));
   }
 
   @Transactional
@@ -207,65 +192,33 @@ public class MenuCatalogService {
         new Recipe(null, request.targetType(), request.targetId(), request.name(), lines);
     assertRecipeTargetExists(recipe.getTargetType(), recipe.getTargetId());
 
-    RecipeEntity entity =
-        recipeRepository
-            .findByTargetTypeAndTargetId(recipe.getTargetType(), recipe.getTargetId())
-            .orElseGet(RecipeEntity::new);
-    entity.setTargetType(recipe.getTargetType());
-    entity.setTargetId(recipe.getTargetId());
-    entity.setName(recipe.getName());
-    entity.getLines().clear();
-    recipe
-        .getLines()
-        .forEach(
-            line -> {
-              RecipeLineEntity lineEntity = new RecipeLineEntity();
-              lineEntity.setRecipe(entity);
-              lineEntity.setIngredient(line.getIngredient());
-              lineEntity.setQuantity(line.getQuantity());
-              lineEntity.setUnit(line.getUnit());
-              lineEntity.setSortOrder(line.getSortOrder());
-              entity.getLines().add(lineEntity);
-            });
-    return toRecipeResponse(recipeRepository.save(entity));
+    return toRecipeResponse(recipeRepository.save(recipe));
   }
 
   @Transactional(readOnly = true)
   public RecipeResponse getRecipe(RecipeTargetType targetType, UUID targetId) {
     return recipeRepository
-        .findByTargetTypeAndTargetId(targetType, targetId)
+        .findByTarget(targetType, targetId)
         .map(this::toRecipeResponse)
         .orElseThrow(() -> new EntityNotFoundException("Recipe not found"));
   }
 
   @Transactional(readOnly = true)
   public PublicMenuResponse getPublicMenu() {
-    List<MenuCategoryEntity> categories =
-        categoryRepository.findByStatusOrderBySortOrderAscNameAsc(MenuStatus.ACTIVE);
-    List<UUID> categoryIds = categories.stream().map(MenuCategoryEntity::getId).toList();
-    List<DishEntity> dishes =
-        categoryIds.isEmpty()
-            ? List.of()
-            : dishRepository.findByCategory_IdInAndStatusOrderBySortOrderAscNameAsc(
-                categoryIds, MenuStatus.ACTIVE);
-    List<UUID> dishIds = dishes.stream().map(DishEntity::getId).toList();
-    List<ToppingGroupEntity> groups =
-        dishIds.isEmpty()
-            ? List.of()
-            : toppingGroupRepository.findByDish_IdInOrderBySortOrderAscNameAsc(dishIds);
-    List<UUID> groupIds = groups.stream().map(ToppingGroupEntity::getId).toList();
-    List<ToppingOptionEntity> options =
-        groupIds.isEmpty()
-            ? List.of()
-            : toppingOptionRepository.findByToppingGroup_IdInAndStatusOrderBySortOrderAscNameAsc(
-                groupIds, MenuStatus.ACTIVE);
+    List<MenuCategory> categories = categoryRepository.findActiveOrdered();
+    List<UUID> categoryIds = categories.stream().map(MenuCategory::getId).toList();
+    List<Dish> dishes = dishRepository.findActiveByCategoryIds(categoryIds);
+    List<UUID> dishIds = dishes.stream().map(Dish::getId).toList();
+    List<ToppingGroup> groups = toppingGroupRepository.findByDishIds(dishIds);
+    List<UUID> groupIds = groups.stream().map(ToppingGroup::getId).toList();
+    List<ToppingOption> options = toppingOptionRepository.findActiveByToppingGroupIds(groupIds);
 
-    Map<UUID, List<ToppingOptionEntity>> optionsByGroup =
-        options.stream().collect(Collectors.groupingBy(option -> option.getToppingGroup().getId()));
-    Map<UUID, List<ToppingGroupEntity>> groupsByDish =
-        groups.stream().collect(Collectors.groupingBy(group -> group.getDish().getId()));
-    Map<UUID, List<DishEntity>> dishesByCategory =
-        dishes.stream().collect(Collectors.groupingBy(dish -> dish.getCategory().getId()));
+    Map<UUID, List<ToppingOption>> optionsByGroup =
+        options.stream().collect(Collectors.groupingBy(ToppingOption::getToppingGroupId));
+    Map<UUID, List<ToppingGroup>> groupsByDish =
+        groups.stream().collect(Collectors.groupingBy(ToppingGroup::getDishId));
+    Map<UUID, List<Dish>> dishesByCategory =
+        dishes.stream().collect(Collectors.groupingBy(Dish::getCategoryId));
 
     List<PublicCategory> responseCategories =
         categories.stream()
@@ -277,7 +230,7 @@ public class MenuCatalogService {
                         category.getDescription(),
                         category.getSortOrder(),
                         dishesByCategory.getOrDefault(category.getId(), List.of()).stream()
-                            .sorted(bySortThenName(DishEntity::getSortOrder, DishEntity::getName))
+                            .sorted(bySortThenName(Dish::getSortOrder, Dish::getName))
                             .map(
                                 dish ->
                                     new PublicDish(
@@ -289,8 +242,8 @@ public class MenuCatalogService {
                                         groupsByDish.getOrDefault(dish.getId(), List.of()).stream()
                                             .sorted(
                                                 bySortThenName(
-                                                    ToppingGroupEntity::getSortOrder,
-                                                    ToppingGroupEntity::getName))
+                                                    ToppingGroup::getSortOrder,
+                                                    ToppingGroup::getName))
                                             .map(
                                                 group ->
                                                     new PublicToppingGroup(
@@ -304,9 +257,8 @@ public class MenuCatalogService {
                                                             .stream()
                                                             .sorted(
                                                                 bySortThenName(
-                                                                    ToppingOptionEntity
-                                                                        ::getSortOrder,
-                                                                    ToppingOptionEntity::getName))
+                                                                    ToppingOption::getSortOrder,
+                                                                    ToppingOption::getName))
                                                             .map(
                                                                 option ->
                                                                     new PublicToppingOption(
@@ -321,25 +273,25 @@ public class MenuCatalogService {
     return new PublicMenuResponse(responseCategories);
   }
 
-  private MenuCategoryEntity findCategory(UUID id) {
+  private MenuCategory findCategory(UUID id) {
     return categoryRepository
         .findById(id)
         .orElseThrow(() -> new EntityNotFoundException("Category not found"));
   }
 
-  private DishEntity findDish(UUID id) {
+  private Dish findDish(UUID id) {
     return dishRepository
         .findById(id)
         .orElseThrow(() -> new EntityNotFoundException("Dish not found"));
   }
 
-  private ToppingGroupEntity findGroup(UUID id) {
+  private ToppingGroup findGroup(UUID id) {
     return toppingGroupRepository
         .findById(id)
         .orElseThrow(() -> new EntityNotFoundException("Topping group not found"));
   }
 
-  private ToppingOptionEntity findOption(UUID id) {
+  private ToppingOption findOption(UUID id) {
     return toppingOptionRepository
         .findById(id)
         .orElseThrow(() -> new EntityNotFoundException("Topping option not found"));
@@ -353,7 +305,7 @@ public class MenuCatalogService {
     }
   }
 
-  private CategoryResponse toCategoryResponse(MenuCategoryEntity entity) {
+  private CategoryResponse toCategoryResponse(MenuCategory entity) {
     return new CategoryResponse(
         entity.getId(),
         entity.getName(),
@@ -362,10 +314,10 @@ public class MenuCatalogService {
         entity.getStatus());
   }
 
-  private DishResponse toDishResponse(DishEntity entity) {
+  private DishResponse toDishResponse(Dish entity) {
     return new DishResponse(
         entity.getId(),
-        entity.getCategory().getId(),
+        entity.getCategoryId(),
         entity.getName(),
         entity.getDescription(),
         entity.getBasePrice(),
@@ -373,34 +325,34 @@ public class MenuCatalogService {
         entity.getSortOrder());
   }
 
-  private ToppingGroupResponse toGroupResponse(ToppingGroupEntity entity) {
+  private ToppingGroupResponse toGroupResponse(ToppingGroup entity) {
     return new ToppingGroupResponse(
         entity.getId(),
-        entity.getDish().getId(),
+        entity.getDishId(),
         entity.getName(),
         entity.getMinSelections(),
         entity.getMaxSelections(),
         entity.getSortOrder());
   }
 
-  private ToppingOptionResponse toOptionResponse(ToppingOptionEntity entity) {
+  private ToppingOptionResponse toOptionResponse(ToppingOption entity) {
     return new ToppingOptionResponse(
         entity.getId(),
-        entity.getToppingGroup().getId(),
+        entity.getToppingGroupId(),
         entity.getName(),
         entity.getAdditionalPrice(),
         entity.getStatus(),
         entity.getSortOrder());
   }
 
-  private RecipeResponse toRecipeResponse(RecipeEntity entity) {
+  private RecipeResponse toRecipeResponse(Recipe entity) {
     return new RecipeResponse(
         entity.getId(),
         entity.getTargetType(),
         entity.getTargetId(),
         entity.getName(),
         entity.getLines().stream()
-            .sorted(Comparator.comparingInt(RecipeLineEntity::getSortOrder))
+            .sorted(Comparator.comparingInt(RecipeLine::getSortOrder))
             .map(
                 line ->
                     new RecipeResponse.Line(

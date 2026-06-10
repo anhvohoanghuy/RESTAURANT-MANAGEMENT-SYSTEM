@@ -22,14 +22,14 @@ Passed.
 |-------------|--------|----------|
 | MENU-001 | Passed | Domain models exist for categories, dishes, topping groups, topping options, recipes, and recipe lines. |
 | MENU-002 | Passed | JPA entities and repositories exist for all six planned tables. |
-| MENU-003 | Passed | `AdminMenuController` exposes catalog management endpoints under `/admin/menu/**`. |
+| MENU-003 | Passed | `AdminMenuController` exposes catalog management endpoints under `/admin/menu/**`; `MenuCatalogService` depends on domain repository ports. |
 | MENU-004 | Passed | `PublicMenuController` exposes `GET /menus/public`; service query uses active category, dish, and topping option filters. |
 | MENU-005 | Passed | Recipes target dishes or topping options and are not present in public response DTOs. |
 
 ## Automated Checks
 
 - `mvn -Dtest=MenuCatalogServiceTest,PublicMenuControllerTest test`: passed, 5 tests.
-- `mvn test`: passed, 6 tests.
+- `mvn test`: passed, 6 tests after adding domain repository ports and infrastructure adapters.
 
 ## Notes
 

@@ -12,7 +12,25 @@ Use the existing DDD-inspired package shape:
 
 ## Persistence Pattern
 
-Use Spring Data JPA repositories directly behind the application service for this vertical catalog slice. Entities should use explicit table names:
+Use domain repository ports behind the application service. Spring Data JPA repositories stay in infrastructure and are hidden behind adapter classes.
+
+Domain ports:
+
+- `MenuCategoryDomainRepository`
+- `DishDomainRepository`
+- `ToppingGroupDomainRepository`
+- `ToppingOptionDomainRepository`
+- `RecipeDomainRepository`
+
+Infrastructure adapters:
+
+- `MenuCategoryDomainRepositoryAdapter`
+- `DishDomainRepositoryAdapter`
+- `ToppingGroupDomainRepositoryAdapter`
+- `ToppingOptionDomainRepositoryAdapter`
+- `RecipeDomainRepositoryAdapter`
+
+Entities should use explicit table names:
 
 - `MenuCategoryEntity` -> `menu_categories`
 - `DishEntity` -> `dishes`
@@ -22,6 +40,8 @@ Use Spring Data JPA repositories directly behind the application service for thi
 - `RecipeLineEntity` -> `recipe_lines`
 
 Use `@Enumerated(EnumType.STRING)` for lifecycle and recipe target enums.
+
+Application services must not import `menu_context.infrastructure.*`; they depend on domain models and domain repository interfaces only.
 
 ## API Pattern
 
