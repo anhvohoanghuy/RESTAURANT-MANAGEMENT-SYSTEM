@@ -42,7 +42,7 @@ public class JwtProvider {
     JwtBuilder builder =
         Jwts.builder()
             .subject(user.getId().toString())
-            .claim("role", roles)
+            .claim("roles", roles)
             .claim("tokenType", type.name())
             .issuedAt(now)
             .expiration(expiryDate)
@@ -68,7 +68,7 @@ public class JwtProvider {
   }
 
   public String extractRole(String token) {
-    return parseClaims(token).get("role", String.class);
+    return parseClaims(token).get("roles", String.class);
   }
 
   public String extractPermission(String token) {

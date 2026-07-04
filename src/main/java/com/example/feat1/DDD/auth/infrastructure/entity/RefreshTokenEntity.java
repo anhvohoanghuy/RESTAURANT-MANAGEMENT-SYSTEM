@@ -5,21 +5,27 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(onlyExplicitlyIncluded = true)
 @Entity
 @Table(name = "refresh_tokens")
 public class RefreshTokenEntity {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
+  @ToString.Include
   private UUID id;
 
   @Column(nullable = false, unique = true, length = 512)
+  @ToString.Include
   private String token;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -27,6 +33,7 @@ public class RefreshTokenEntity {
   private UserEntity user;
 
   @Column(nullable = false)
+  @ToString.Include
   private Instant expiryDate;
 
   @Column(nullable = false)

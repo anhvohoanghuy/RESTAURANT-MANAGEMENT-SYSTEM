@@ -1,9 +1,11 @@
 package com.example.feat1.DDD.identity_context.domain.repository.user;
 
 import com.example.feat1.DDD.identity_context.domain.model.aggregate.User;
+import com.example.feat1.DDD.identity_context.infastructure.entity.RoleEntity;
 import com.example.feat1.DDD.identity_context.infastructure.entity.UserEntity;
 import com.example.feat1.DDD.identity_context.infastructure.mapper.UserMapper;
 import com.example.feat1.DDD.identity_context.infastructure.repository.IUserRepository;
+import jakarta.persistence.EntityManager;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class UserDomainRepository implements IUserDomainRepository {
   private final IUserRepository jpaRepo;
+  private final EntityManager entityManager;
 
   @Override
   public Optional<User> findByEmail(String email) {
@@ -32,6 +35,13 @@ public class UserDomainRepository implements IUserDomainRepository {
   @Override
   public void save(User user) {
     UserEntity entity = UserMapper.userToEntity(user);
+    entity
+        .getUserRoles()
+        .forEach(
+            userRole -> {
+              UUID roleId = userRole.getRole().getId();
+              userRole.setRole(entityManager.getReference(RoleEntity.class, roleId));
+            });
     jpaRepo.save(entity);
   }
 

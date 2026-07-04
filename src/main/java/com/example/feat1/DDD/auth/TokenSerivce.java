@@ -9,18 +9,22 @@ import com.example.feat1.DDD.identity_context.domain.model.aggregate.User;
 import com.example.feat1.DDD.identity_context.infastructure.entity.UserEntity;
 import com.example.feat1.DDD.identity_context.infastructure.mapper.UserService;
 import com.example.feat1.DDD.identity_context.infastructure.repository.IRefreshTokenRepository;
+import com.example.feat1.common.exception.AppException;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class TokenSerivce {
+  private static final String BEARER_TOKEN_TYPE = "Bearer";
+
   private final JwtProvider jwtProvider;
   private final IRefreshTokenRepository refreshTokenRepository;
   private final UserService userService;
@@ -31,61 +35,69 @@ public class TokenSerivce {
   public AuthResponse generateAccessToken(User user) {
     String accessToken = jwtProvider.generateToken(user, TokenType.ACCESS);
     String refreshToken = jwtProvider.generateToken(user, TokenType.REFRESH);
+    long accessExpiration = jwtProvider.getExpiration(TokenType.ACCESS);
+    long refreshExpiration = jwtProvider.getExpiration(TokenType.REFRESH);
     UserEntity userReference = entityManager.getReference(UserEntity.class, user.getId());
-    Instant refreshExpiry = Instant.now().plusMillis(jwtProvider.getExpiration(TokenType.REFRESH));
+    Instant refreshExpiry = Instant.now().plusMillis(refreshExpiration);
 
     RefreshTokenEntity refreshTokenEntity =
         RefreshTokenEntity.active(refreshToken, userReference, refreshExpiry);
     refreshTokenRepository.save(refreshTokenEntity);
     refreshTokenCache.put(refreshToken, user.getId(), refreshExpiry);
 
-    return new AuthResponse(accessToken, refreshToken);
+    return new AuthResponse(
+        accessToken, refreshToken, BEARER_TOKEN_TYPE, accessExpiration, refreshExpiration);
   }
 
   @Transactional
   public AuthResponse refresh(String refreshToken) {
     if (refreshToken == null || refreshToken.isEmpty()) {
-      throw new IllegalArgumentException("Refresh token cannot be null or empty");
+      throw new AppException(
+          "REFRESH_TOKEN_REQUIRED", "Refresh token is required", HttpStatus.BAD_REQUEST);
     }
 
     if (!jwtProvider.validateToken(refreshToken)
         || !jwtProvider.isTokenType(refreshToken, TokenType.REFRESH)) {
-      throw new RuntimeException("Refresh token is invalid");
+      throw new AppException(
+          "REFRESH_TOKEN_INVALID", "Refresh token is invalid", HttpStatus.UNAUTHORIZED);
     }
 
     UUID userId = jwtProvider.extractUserId(refreshToken);
     boolean cacheHit = refreshTokenCache.contains(refreshToken);
 
-    Optional<RefreshTokenEntity> storedToken =
-        refreshTokenRepository.findByToken(refreshToken);
+    Optional<RefreshTokenEntity> storedToken = refreshTokenRepository.findByToken(refreshToken);
     if (storedToken.isEmpty()) {
-      throw new RuntimeException("Refresh token not found");
+      throw new AppException(
+          "REFRESH_TOKEN_REVOKED", "Refresh token is revoked", HttpStatus.UNAUTHORIZED);
     }
 
     RefreshTokenEntity refreshTokenEntity = storedToken.get();
     UUID storedUserId = refreshTokenEntity.getUser().getId();
     if (!storedUserId.equals(userId)) {
       revokeAllUserRefreshTokens(storedUserId);
-      throw new RuntimeException("Refresh token subject does not match stored owner");
+      throw new AppException(
+          "REFRESH_TOKEN_REUSED", "Refresh token reuse detected", HttpStatus.UNAUTHORIZED);
     }
 
     Instant now = Instant.now();
     if (refreshTokenEntity.isRevoked()) {
       revokeAllUserRefreshTokens(userId);
-      throw new RuntimeException("Refresh token reuse detected");
+      throw new AppException(
+          "REFRESH_TOKEN_REUSED", "Refresh token reuse detected", HttpStatus.UNAUTHORIZED);
     }
 
     if (refreshTokenEntity.isExpired(now)) {
       refreshTokenEntity.revoke(now);
       refreshTokenRepository.save(refreshTokenEntity);
       refreshTokenCache.evict(refreshToken);
-      throw new RuntimeException("Refresh token is expired");
+      throw new AppException(
+          "REFRESH_TOKEN_EXPIRED", "Refresh token is expired", HttpStatus.UNAUTHORIZED);
     }
 
     Optional<User> user = userService.getUserById(userId);
 
     if (user.isEmpty()) {
-      throw new RuntimeException("User not found");
+      throw new AppException("USER_NOT_FOUND", "User not found", HttpStatus.UNAUTHORIZED);
     }
 
     if (!cacheHit) {
@@ -94,7 +106,9 @@ public class TokenSerivce {
 
     String newAccessToken = jwtProvider.generateToken(user.get(), TokenType.ACCESS);
     String newRefreshToken = jwtProvider.generateToken(user.get(), TokenType.REFRESH);
-    Instant newRefreshExpiry = now.plusMillis(jwtProvider.getExpiration(TokenType.REFRESH));
+    long accessExpiration = jwtProvider.getExpiration(TokenType.ACCESS);
+    long refreshExpiration = jwtProvider.getExpiration(TokenType.REFRESH);
+    Instant newRefreshExpiry = now.plusMillis(refreshExpiration);
     UserEntity userReference = entityManager.getReference(UserEntity.class, userId);
 
     refreshTokenEntity.rotateTo(newRefreshToken, now);
@@ -105,7 +119,8 @@ public class TokenSerivce {
     refreshTokenCache.evict(refreshToken);
     refreshTokenCache.put(newRefreshToken, userId, newRefreshExpiry);
 
-    return new AuthResponse(newAccessToken, newRefreshToken);
+    return new AuthResponse(
+        newAccessToken, newRefreshToken, BEARER_TOKEN_TYPE, accessExpiration, refreshExpiration);
   }
 
   @Transactional

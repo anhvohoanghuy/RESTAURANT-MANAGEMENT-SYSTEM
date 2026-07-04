@@ -23,6 +23,8 @@ public interface IUserRepository extends JpaRepository<UserEntity, UUID> {
                 FROM UserEntity u
                 JOIN FETCH u.userRoles ur
                 JOIN FETCH ur.role r
+                LEFT JOIN FETCH r.rolePermissions rp
+                LEFT JOIN FETCH rp.permission
                 WHERE u.id = :id
             """)
   Optional<UserEntity> findByIdWithRoles(UUID id);

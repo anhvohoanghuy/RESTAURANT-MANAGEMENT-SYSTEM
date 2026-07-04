@@ -30,14 +30,15 @@ public class RedisRefreshTokenCache implements RefreshTokenCache {
   @Override
   public void put(String refreshToken, UUID userId, Instant expiryDate) {
     Duration ttl = Duration.between(Instant.now(), expiryDate);
-    if (!ttl.isPositive()) {
+    if (ttl.isZero() || ttl.isNegative()) {
       return;
     }
 
     try {
       redisTemplate.opsForValue().set(key(refreshToken), userId.toString(), ttl);
     } catch (RuntimeException exception) {
-      log.warn("Failed to cache refresh token in Redis; database remains source of truth", exception);
+      log.warn(
+          "Failed to cache refresh token in Redis; database remains source of truth", exception);
     }
   }
 
@@ -46,7 +47,8 @@ public class RedisRefreshTokenCache implements RefreshTokenCache {
     try {
       redisTemplate.delete(key(refreshToken));
     } catch (RuntimeException exception) {
-      log.warn("Failed to evict refresh token from Redis; database remains source of truth", exception);
+      log.warn(
+          "Failed to evict refresh token from Redis; database remains source of truth", exception);
     }
   }
 

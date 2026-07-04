@@ -19,7 +19,7 @@ public class CustomUserDetailsService {
   private final ICredentialDomainRepository credentialDomainRepository;
 
   public CustomUserDetails loadUserById(UUID id) {
-    Optional<User> userDomain = userDomainRepository.findById(id);
+    Optional<User> userDomain = userDomainRepository.findByIdWithRoles(id);
     Optional<Credential> credentialDomain = credentialDomainRepository.findByUserId(id);
     if (userDomain.isEmpty() || credentialDomain.isEmpty()) {
       throw new RuntimeException("User not found");

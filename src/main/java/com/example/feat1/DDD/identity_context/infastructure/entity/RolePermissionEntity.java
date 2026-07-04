@@ -3,12 +3,16 @@ package com.example.feat1.DDD.identity_context.infastructure.entity;
 import jakarta.persistence.*;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(onlyExplicitlyIncluded = true)
 @Entity
 @Table(
     name = "role_permissions",
@@ -21,6 +25,7 @@ public class RolePermissionEntity {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
+  @ToString.Include
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)

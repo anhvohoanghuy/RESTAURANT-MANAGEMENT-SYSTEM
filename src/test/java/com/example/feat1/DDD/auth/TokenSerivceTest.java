@@ -60,6 +60,7 @@ class TokenSerivceTest {
     when(jwtProvider.extractUserId("old-refresh")).thenReturn(userId);
     when(jwtProvider.generateToken(user, TokenType.ACCESS)).thenReturn("new-access");
     when(jwtProvider.generateToken(user, TokenType.REFRESH)).thenReturn("new-refresh");
+    when(jwtProvider.getExpiration(TokenType.ACCESS)).thenReturn(900_000L);
     when(jwtProvider.getExpiration(TokenType.REFRESH)).thenReturn(60_000L);
     when(refreshTokenCache.contains("old-refresh")).thenReturn(false);
     when(refreshTokenRepository.findByToken("old-refresh")).thenReturn(Optional.of(oldToken));
@@ -70,6 +71,9 @@ class TokenSerivceTest {
 
     assertThat(response.getAccessToken()).isEqualTo("new-access");
     assertThat(response.getRefreshToken()).isEqualTo("new-refresh");
+    assertThat(response.getTokenType()).isEqualTo("Bearer");
+    assertThat(response.getAccessExpiresIn()).isEqualTo(900_000L);
+    assertThat(response.getRefreshExpiresIn()).isEqualTo(60_000L);
     assertThat(oldToken.isRevoked()).isTrue();
     assertThat(oldToken.getReplacedByToken()).isEqualTo("new-refresh");
     verify(refreshTokenCache).put("old-refresh", userId, oldToken.getExpiryDate());

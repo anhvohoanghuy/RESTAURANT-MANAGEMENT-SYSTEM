@@ -6,24 +6,29 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(onlyExplicitlyIncluded = true)
 @Entity
 @Table(name = "credentials")
 public class CredentialEntity {
 
-  @Id private UUID id;
+  @Id @ToString.Include private UUID id;
 
-  private UUID userId;
+  @ToString.Include private UUID userId;
 
   @Column(nullable = false, unique = true)
+  @ToString.Include
   private String providerUserId;
 
   private String passwordHash;
 
-  private String authProvider;
+  @ToString.Include private String authProvider;
 }

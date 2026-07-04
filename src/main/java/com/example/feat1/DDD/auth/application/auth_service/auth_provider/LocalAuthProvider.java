@@ -8,7 +8,9 @@ import com.example.feat1.DDD.identity_context.domain.model.entity.Credential;
 import com.example.feat1.DDD.identity_context.domain.model.enums.AuthProvider;
 import com.example.feat1.DDD.identity_context.domain.repository.credential.ICredentialDomainRepository;
 import com.example.feat1.DDD.identity_context.domain.repository.user.IUserDomainRepository;
+import com.example.feat1.common.exception.AppException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -25,17 +27,24 @@ public class LocalAuthProvider implements IAuthProvider {
     Credential credential =
         credentialDomainRepository
             .findByProviderAndProviderUserId(AuthProvider.LOCAL, authRequest.getUsername())
-            .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+            .orElseThrow(() -> invalidCredentials());
 
     if (!passwordEncoder.matches(authRequest.getPassword(), credential.getPasswordHash())) {
-      throw new RuntimeException("Invalid username or password");
+      throw invalidCredentials();
     }
 
     User user =
         userDomainRepository
             .findByIdWithRoles(credential.getUserId())
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(
+                () ->
+                    new AppException("USER_NOT_FOUND", "User not found", HttpStatus.UNAUTHORIZED));
 
     return tokenSerivce.generateAccessToken(user);
+  }
+
+  private AppException invalidCredentials() {
+    return new AppException(
+        "INVALID_CREDENTIALS", "Invalid username or password", HttpStatus.UNAUTHORIZED);
   }
 }

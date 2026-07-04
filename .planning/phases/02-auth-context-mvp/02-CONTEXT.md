@@ -37,9 +37,39 @@ Out of scope:
 - **D-05:** Rotate refresh tokens on every successful `/auth/refresh`. A successful refresh returns a new access token and a new refresh token, and the previous refresh token is revoked or deleted from both Redis and the database token state.
 - **D-06:** Logout revokes the submitted refresh token by removing it from Redis and revoking or deleting it in the database source of truth.
 - **D-07:** Reuse of a rotated or revoked refresh token is treated as a token-theft signal. When detected, revoke all active refresh tokens for that user across Redis and the database, forcing re-login on all sessions.
+- **D-08:** Refresh-token database state uses soft revocation, not hard delete. Logout and rotation keep records with `revokedAt` and `replacedByToken` where applicable so reuse detection and audit remain possible.
+
+### Auth API Contract
+- **D-09:** Use `/auth/**` as the canonical auth API prefix for the MVP. Keep `/auth/login`, `/auth/refresh`, and `/auth/logout` as the primary contract.
+- **D-10:** Add public registration at `POST /auth/register`.
+- **D-11:** Add authenticated self/profile at `GET /users/me`, returning a safe DTO instead of a domain aggregate or credential data.
+- **D-18:** `POST /auth/refresh` and `POST /auth/logout` use JSON request bodies shaped as `{ "refreshToken": "..." }`. Raw string request bodies are not the primary API contract.
+- **D-19:** `POST /auth/login` uses a local-only public request shaped as `{ "username": "...", "password": "..." }`. The server defaults to local auth; `authType` stays internal for the provider architecture.
+- **D-20:** Login and refresh responses include `{ accessToken, refreshToken, tokenType, accessExpiresIn, refreshExpiresIn }`, with `tokenType` set to `Bearer` and expirations expressed in milliseconds.
+- **D-21:** `POST /auth/logout` returns `204 No Content` and is idempotent for already-revoked or missing token state. Missing or malformed refresh-token request bodies still use the global error contract.
+
+### Registration Roles
+- **D-12:** Public registration always assigns the default `USER` role.
+- **D-13:** Public registration must not trust roles supplied by the request. `ADMIN` creation is seed/manual or a future phase.
+- **D-22:** `POST /auth/register` auto-logs in after successful local registration and returns the same token response shape as login.
+- **D-23:** Local login uses username as the identifier. Registration stores local credentials with `providerUserId = username`; email remains a unique profile/contact field.
+- **D-24:** Seed `USER` and `ADMIN` roles at startup if missing. Do not seed a full permission matrix in this MVP.
+
+### Token Claims
+- **D-25:** Access tokens include user identity as subject, `roles`, `permissions`, `iat`, `exp`, `jti`, and `tokenType`. If no role-permission rows exist, `permissions` is an empty list.
+- **D-26:** Refresh tokens do not need permissions.
+
+### Error Contract
+- **D-14:** Define a global application exception contract, not an auth-only handler.
+- **D-15:** Error responses use stable JSON: `code`, `message`, and `timestamp`.
+- **D-16:** Auth failures should map consistently for invalid credentials, expired refresh tokens, revoked/reused refresh tokens, unauthenticated requests, and forbidden access.
+- **D-27:** Refresh-token reuse returns HTTP `401` with code `REFRESH_TOKEN_REUSED` and message `Refresh token reuse detected`, while still revoking all active sessions for the user.
+
+### Cleanup Boundary
+- **D-17:** Cleanup only what is needed to make auth run and tests pass. Avoid broad package renames such as `infastructure` or wide `rolePermision` cleanup in this phase.
 
 ### the agent's Discretion
-- API contract, registration/default-role details, error response shape, and cleanup boundary were not discussed in this pass. Downstream planning should use the roadmap, requirements, existing code, and conservative Spring Boot API conventions unless the user runs another discuss pass for those areas.
+- Keep any compatibility-only route permits or old DTO fields if removing them would expand the blast radius beyond the auth MVP.
 
 </decisions>
 
@@ -122,6 +152,13 @@ Out of scope:
 - Redis should be configured with Docker as part of this phase so local/dev workflows can run the refresh-token cache path.
 - Redis miss should not mean invalid token by itself; it should fall back to database validation and then repopulate Redis when the database token is valid.
 - Refresh-token reuse after rotation should be treated as suspicious and should revoke every active refresh token for that user.
+- Public registration is `/auth/register`, local-only, and assigns `USER` server-side.
+- Registration returns a token pair after successful user creation.
+- Self/profile is `GET /users/me` and must not expose password hashes.
+- Refresh/logout request bodies use `{ "refreshToken": "..." }`.
+- Login request body uses `{ "username": "...", "password": "..." }`.
+- Login/refresh responses include token type and expiration metadata.
+- Application errors should be normalized as `{ "code": "...", "message": "...", "timestamp": "..." }`.
 
 </specifics>
 
@@ -131,7 +168,7 @@ Out of scope:
 - Google/OAuth login remains out of scope for this local auth MVP.
 - Password reset and email verification remain out of scope.
 - Full role/permission admin UI remains out of scope.
-- Detailed discussion of API prefix, registration role policy, auth error response body, and naming/refactor cleanup was deferred.
+- Broad naming/package refactors remain out of scope unless needed for auth correctness.
 
 </deferred>
 
