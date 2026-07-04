@@ -1,6 +1,7 @@
 package com.example.feat1.DDD.auth.infrastructure.security;
 
 import com.example.feat1.DDD.auth.application.auth_service.jwt.JwtProvider;
+import com.example.feat1.DDD.auth.application.auth_service.jwt.TokenType;
 import com.example.feat1.DDD.auth.infrastructure.service.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -36,7 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     String jwt = authHeader.substring(7);
 
-    if (!jwtService.validateToken(jwt)) {
+    if (!jwtService.validateToken(jwt) || !jwtService.isTokenType(jwt, TokenType.ACCESS)) {
       filterChain.doFilter(request, response);
       return;
     }

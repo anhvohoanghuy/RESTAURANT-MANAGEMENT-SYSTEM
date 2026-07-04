@@ -43,6 +43,7 @@ public class JwtProvider {
         Jwts.builder()
             .subject(user.getId().toString())
             .claim("role", roles)
+            .claim("tokenType", type.name())
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(getSigningKey())
@@ -77,6 +78,18 @@ public class JwtProvider {
   public UUID extractUserId(String token) {
     Claims claims = parseClaims(token);
     return UUID.fromString(claims.getSubject());
+  }
+
+  public TokenType extractTokenType(String token) {
+    return TokenType.valueOf(parseClaims(token).get("tokenType", String.class));
+  }
+
+  public boolean isTokenType(String token, TokenType expectedType) {
+    try {
+      return extractTokenType(token) == expectedType;
+    } catch (IllegalArgumentException | NullPointerException exception) {
+      return false;
+    }
   }
 
   private Claims parseClaims(String token) {

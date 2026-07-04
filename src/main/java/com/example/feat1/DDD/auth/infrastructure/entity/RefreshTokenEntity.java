@@ -28,4 +28,39 @@ public class RefreshTokenEntity {
 
   @Column(nullable = false)
   private Instant expiryDate;
+
+  @Column(nullable = false)
+  private Instant createdAt;
+
+  private Instant revokedAt;
+
+  @Column(length = 512)
+  private String replacedByToken;
+
+  public static RefreshTokenEntity active(String token, UserEntity user, Instant expiryDate) {
+    return new RefreshTokenEntity(null, token, user, expiryDate, Instant.now(), null, null);
+  }
+
+  public boolean isRevoked() {
+    return revokedAt != null;
+  }
+
+  public boolean isExpired(Instant now) {
+    return !expiryDate.isAfter(now);
+  }
+
+  public boolean isUsable(Instant now) {
+    return !isRevoked() && !isExpired(now);
+  }
+
+  public void revoke(Instant now) {
+    if (revokedAt == null) {
+      revokedAt = now;
+    }
+  }
+
+  public void rotateTo(String newRefreshToken, Instant now) {
+    revoke(now);
+    replacedByToken = newRefreshToken;
+  }
 }
