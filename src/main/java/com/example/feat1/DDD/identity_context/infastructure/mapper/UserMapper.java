@@ -29,6 +29,8 @@ public class UserMapper {
             entity.getId(),
             entity.getName(),
             entity.getEmail(),
+            entity.isEmailVerified(),
+            entity.getEmailVerifiedAt(),
             userRolesToDomain(entity.getUserRoles())));
   }
 
@@ -41,6 +43,8 @@ public class UserMapper {
     entity.setId(user.getId());
     entity.setName(user.getName());
     entity.setEmail(user.getEmail());
+    entity.setEmailVerified(user.isEmailVerified());
+    entity.setEmailVerifiedAt(user.getEmailVerifiedAt());
     entity.setUserRoles(userRolesToEntity(user.getUserRoles(), entity));
 
     return entity;

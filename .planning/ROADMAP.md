@@ -9,6 +9,7 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 - [x] **Phase 01: menu-context** - Add restaurant menu catalog CRUD and public read API. Completed: 2026-06-10
 - [ ] **Phase 02: auth-context-mvp** - Stabilize local registration, login, JWT access, refresh-token lifecycle, logout revocation, and role-protected route access.
 - [x] **Phase 03: google-oauth-2-login** - Add Google OAuth 2 ID-token login that issues the existing backend token pair. (completed 2026-07-04)
+- [x] **Phase 04: email-verification-password-reset** - Add backend token APIs for email verification and local password reset without SMTP/provider integration. Completed: 2026-07-04
 
 ## Phase Details
 
@@ -38,17 +39,19 @@ Plans:
   4. Logout revokes the submitted refresh token and reuse fails with a consistent auth error response.
   5. Authenticated users can call a self/profile endpoint and protected routes enforce `ADMIN`/`USER` access through Spring Security.
   6. Focused tests cover registration, login, refresh, logout, JWT filter behavior, and protected route authorization.
-**Plans**: 0 plans
+**Plans**: 1 plan
 
 Plans:
-- [ ] TBD (run `/gsd-plan-phase 2` to break down)
+- [ ] 02-01: Implement Auth Context MVP vertical slice
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 01. menu-context | 1/1 | Complete | 2026-06-10 |
-| 02. auth-context-mvp | 0/0 | Planned | - |
+| 02. auth-context-mvp | 0/1 | Planned | - |
+| 03. google-oauth-2-login | 1/1 | Complete | 2026-07-04 |
+| 04. email-verification-password-reset | 1/1 | Complete | 2026-07-04 |
 
 ### Phase 3: Google OAuth 2 login
 
@@ -66,3 +69,20 @@ Plans:
 
 Plans:
 - [x] 03-01: Implement Google OAuth 2 ID-token login
+
+### Phase 04: email-verification-password-reset
+
+**Goal:** Add backend-only email verification and password reset token flows that persist verification state, reset local credentials safely, and expose notification ports for future email delivery integration.
+**Requirements**: [AUTH-012, AUTH-013, AUTH-014]
+**Depends on:** Phase 2, Phase 3
+**Success Criteria** (what must be TRUE):
+  1. Public clients can request email verification and password reset without receiving raw tokens in API responses.
+  2. Verification and reset tokens are stored as hashes, expire, and are single-use.
+  3. Email verification marks users as verified while allowing unverified users to keep logging in.
+  4. Password reset only changes local credentials and revokes active refresh tokens after success.
+  5. Google-created or Google-linked verified emails mark the user email as verified.
+  6. Focused unit, controller, and integration tests cover token issue, consume, expiry, verification, reset, and notification-port behavior.
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 04-01: Implement email verification and password reset token APIs

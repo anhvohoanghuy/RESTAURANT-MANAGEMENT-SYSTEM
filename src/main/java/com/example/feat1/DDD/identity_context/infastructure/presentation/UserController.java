@@ -41,6 +41,8 @@ public class UserController {
         user.getId(),
         user.getName(),
         user.getEmail(),
+        user.isEmailVerified(),
+        user.getEmailVerifiedAt(),
         user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()));
   }
 

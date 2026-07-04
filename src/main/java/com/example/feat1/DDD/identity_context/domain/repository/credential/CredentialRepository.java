@@ -38,4 +38,11 @@ public class CredentialRepository implements ICredentialDomainRepository {
   public Optional<Credential> findByUserId(UUID userId) {
     return jpaRepo.findByUserId(userId).map(CredentialMapper::toDomain);
   }
+
+  @Override
+  public Optional<Credential> findByUserIdAndProvider(UUID userId, AuthProvider provider) {
+    return jpaRepo
+        .findByUserIdAndAuthProvider(userId, provider.name())
+        .map(CredentialMapper::toDomain);
+  }
 }

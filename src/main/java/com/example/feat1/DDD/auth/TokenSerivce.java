@@ -74,14 +74,14 @@ public class TokenSerivce {
     RefreshTokenEntity refreshTokenEntity = storedToken.get();
     UUID storedUserId = refreshTokenEntity.getUser().getId();
     if (!storedUserId.equals(userId)) {
-      revokeAllUserRefreshTokens(storedUserId);
+      revokeAllRefreshTokens(storedUserId);
       throw new AppException(
           "REFRESH_TOKEN_REUSED", "Refresh token reuse detected", HttpStatus.UNAUTHORIZED);
     }
 
     Instant now = Instant.now();
     if (refreshTokenEntity.isRevoked()) {
-      revokeAllUserRefreshTokens(userId);
+      revokeAllRefreshTokens(userId);
       throw new AppException(
           "REFRESH_TOKEN_REUSED", "Refresh token reuse detected", HttpStatus.UNAUTHORIZED);
     }
@@ -140,7 +140,8 @@ public class TokenSerivce {
     refreshTokenCache.evict(refreshToken);
   }
 
-  private void revokeAllUserRefreshTokens(UUID userId) {
+  @Transactional
+  public void revokeAllRefreshTokens(UUID userId) {
     Instant now = Instant.now();
     List<RefreshTokenEntity> activeTokens =
         refreshTokenRepository.findAllByUser_IdAndRevokedAtIsNull(userId);

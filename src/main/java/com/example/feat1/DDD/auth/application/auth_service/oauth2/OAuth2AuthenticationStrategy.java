@@ -11,6 +11,7 @@ import com.example.feat1.DDD.identity_context.domain.repository.role.IRoleDomain
 import com.example.feat1.DDD.identity_context.domain.repository.user.IUserDomainRepository;
 import com.example.feat1.DDD.identity_context.domain.service.UserDomainService;
 import com.example.feat1.common.exception.AppException;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -76,6 +77,9 @@ public class OAuth2AuthenticationStrategy {
           providerStrategy.emailNotLinkableStatus());
     }
 
+    if (markEmailVerifiedIfProviderVerified(user, userInfo)) {
+      userDomainRepository.save(user);
+    }
     credentialDomainRepository.save(
         Credential.createOAuth(
             user.getId(), providerStrategy.provider(), userInfo.providerUserId()));
@@ -85,6 +89,7 @@ public class OAuth2AuthenticationStrategy {
   private AuthResponse registerUser(
       OAuth2IdentityProviderStrategy providerStrategy, OAuth2UserInfo userInfo) {
     User user = User.register(displayName(userInfo), userInfo.email());
+    markEmailVerifiedIfProviderVerified(user, userInfo);
     userDomainService.validateUser(user);
     Role userRole =
         roleDomainRepository
@@ -96,6 +101,14 @@ public class OAuth2AuthenticationStrategy {
         Credential.createOAuth(
             user.getId(), providerStrategy.provider(), userInfo.providerUserId()));
     return tokenSerivce.generateAccessToken(user);
+  }
+
+  private boolean markEmailVerifiedIfProviderVerified(User user, OAuth2UserInfo userInfo) {
+    if (userInfo.emailVerified() && !user.isEmailVerified()) {
+      user.markEmailVerified(Instant.now());
+      return true;
+    }
+    return false;
   }
 
   private String displayName(OAuth2UserInfo userInfo) {

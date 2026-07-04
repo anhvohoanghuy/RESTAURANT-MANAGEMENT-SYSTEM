@@ -25,7 +25,10 @@
 - [ ] **AUTH-008**: Role-protected routes enforce `ADMIN` and `USER` access consistently through Spring Security.
 - [ ] **AUTH-009**: Auth failures return consistent HTTP statuses and response bodies for invalid credentials, expired tokens, revoked tokens, and unauthorized access.
 - [ ] **AUTH-010**: Focused tests cover registration, login success/failure, refresh success/failure, logout revocation, JWT filter behavior, and protected route access.
-- [ ] **AUTH-011**: The backend supports Google OAuth 2 login by verifying Google ID tokens, issuing the existing backend access/refresh token pair, and creating or linking Google credentials according to the documented account-linking policy.
+- [x] **AUTH-011**: The backend supports Google OAuth 2 login by verifying Google ID tokens, issuing the existing backend access/refresh token pair, and creating or linking Google credentials according to the documented account-linking policy.
+- [x] **AUTH-012**: The backend supports email verification through single-use backend tokens without exposing raw tokens in public API responses.
+- [x] **AUTH-013**: The backend supports password reset for local credentials through single-use backend tokens and revokes active refresh tokens after reset.
+- [x] **AUTH-014**: Email verification and password reset notifications are emitted through a backend notification port that can be faked in tests and replaced by SMTP/provider integration later.
 
 ## Out of Scope
 
@@ -35,7 +38,7 @@
 | Inventory costing | Recipe lines store ingredient, quantity, and unit only. |
 | SKU/variant generation | Topping choices are modeled as topping groups and options. |
 | Public recipe exposure | Recipes are admin/internal catalog data. |
-| Password reset/email verification | Requires email delivery and account recovery policy, planned after local auth MVP. |
+| SMTP/provider email delivery | Phase 04 defines notification ports and token APIs only; real delivery provider integration is deferred. |
 | Full role/permission admin UI | MVP only needs enough role enforcement to protect existing backend routes. |
 
 ## Traceability
@@ -57,11 +60,14 @@
 | AUTH-008 | Phase 2 | Planned |
 | AUTH-009 | Phase 2 | Planned |
 | AUTH-010 | Phase 2 | Planned |
-| AUTH-011 | Phase 3 | Planned |
+| AUTH-011 | Phase 3 | Complete |
+| AUTH-012 | Phase 4 | Complete |
+| AUTH-013 | Phase 4 | Complete |
+| AUTH-014 | Phase 4 | Complete |
 
 **Coverage:**
-- v1 requirements: 16 total
-- Mapped to phases: 16
+- v1 requirements: 19 total
+- Mapped to phases: 19
 - Unmapped: 0
 
 ---

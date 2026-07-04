@@ -1,6 +1,8 @@
 package com.example.feat1.DDD.auth.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.feat1.DDD.auth.application.auth_service.google.GoogleIdTokenVerifier;
 import com.example.feat1.DDD.auth.application.auth_service.google.GoogleUserInfo;
 import com.example.feat1.DDD.auth.application.auth_service.refresh.RefreshTokenCache;
+import com.example.feat1.DDD.auth.application.notification.EmailNotificationPort;
 import com.example.feat1.DDD.identity_context.infastructure.repository.ICredentialRepository;
 import com.example.feat1.DDD.identity_context.infastructure.repository.IRefreshTokenRepository;
 import com.example.feat1.DDD.identity_context.infastructure.repository.IRoleRepository;
@@ -17,6 +20,7 @@ import com.example.feat1.DDD.identity_context.infastructure.repository.IUserRepo
 import com.jayway.jsonpath.JsonPath;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -42,6 +46,7 @@ class AuthFlowIntegrationTest {
   @Autowired private IRoleRepository roleRepository;
   @MockitoBean private RefreshTokenCache refreshTokenCache;
   @MockitoBean private GoogleIdTokenVerifier googleIdTokenVerifier;
+  @MockitoBean private EmailNotificationPort emailNotificationPort;
 
   @Test
   void startupSeedsUserAndAdminRoles() {
@@ -112,6 +117,8 @@ class AuthFlowIntegrationTest {
     var user = userRepository.findByEmail(email).orElseThrow();
     var userWithRoles = userRepository.findByIdWithRoles(user.getId()).orElseThrow();
     assertThat(user.getName()).isEqualTo("Google User");
+    assertThat(user.isEmailVerified()).isTrue();
+    assertThat(user.getEmailVerifiedAt()).isNotNull();
     assertThat(userWithRoles.getRoles()).extracting("name").containsExactly("USER");
     assertThat(credentialRepository.findByAuthProviderAndProviderUserId("GOOGLE", googleSubject))
         .isPresent();
@@ -123,6 +130,109 @@ class AuthFlowIntegrationTest {
         .andExpect(jsonPath("$.email").value(email))
         .andExpect(jsonPath("$.roles[0]").value("USER"))
         .andExpect(jsonPath("$.passwordHash").doesNotExist());
+  }
+
+  @Test
+  void registerVerificationTokenVerifiesEmailAndProfileShowsVerifiedState() throws Exception {
+    String username = unique("verify");
+    String email = username + "@example.com";
+
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"username":"%s","email":"%s","password":"secret123"}
+                        """
+                            .formatted(username, email)))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    String accessToken = JsonPath.read(result.getResponse().getContentAsString(), "$.accessToken");
+    var userBeforeVerify = userRepository.findByEmail(email).orElseThrow();
+    assertThat(userBeforeVerify.isEmailVerified()).isFalse();
+
+    ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
+    verify(emailNotificationPort).sendEmailVerification(any(), tokenCaptor.capture());
+
+    mockMvc
+        .perform(
+            post("/auth/email/verify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"token":"%s"}
+                    """
+                        .formatted(tokenCaptor.getValue())))
+        .andExpect(status().isNoContent());
+
+    mockMvc
+        .perform(get("/users/me").header("Authorization", "Bearer " + accessToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value(email))
+        .andExpect(jsonPath("$.emailVerified").value(true))
+        .andExpect(jsonPath("$.emailVerifiedAt").isString());
+  }
+
+  @Test
+  void forgotPasswordResetChangesLocalPasswordAndRevokesExistingRefreshTokens() throws Exception {
+    String username = unique("reset");
+    String email = username + "@example.com";
+    String refreshToken = register(username, email, "secret123");
+
+    mockMvc
+        .perform(
+            post("/auth/password/forgot")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"email":"%s"}
+                    """
+                        .formatted(email)))
+        .andExpect(status().isAccepted());
+
+    ArgumentCaptor<String> resetTokenCaptor = ArgumentCaptor.forClass(String.class);
+    verify(emailNotificationPort).sendPasswordReset(any(), resetTokenCaptor.capture());
+
+    mockMvc
+        .perform(
+            post("/auth/password/reset")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"token":"%s","newPassword":"newSecret123"}
+                    """
+                        .formatted(resetTokenCaptor.getValue())))
+        .andExpect(status().isNoContent());
+
+    assertThat(refreshTokenRepository.findByToken(refreshToken).orElseThrow().isRevoked()).isTrue();
+
+    mockMvc
+        .perform(
+            post("/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"username":"%s","password":"secret123"}
+                    """
+                        .formatted(username)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+
+    mockMvc
+        .perform(
+            post("/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"username":"%s","password":"newSecret123"}
+                    """
+                        .formatted(username)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.accessToken").isString())
+        .andExpect(jsonPath("$.refreshToken").isString());
   }
 
   @Test

@@ -6,13 +6,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.feat1.DDD.auth.application.AuthAccountRecoveryService;
 import com.example.feat1.DDD.auth.application.AuthService;
 import com.example.feat1.DDD.auth.application.dto.AuthRequest;
 import com.example.feat1.DDD.auth.application.dto.AuthResponse;
+import com.example.feat1.DDD.auth.application.dto.EmailRequest;
 import com.example.feat1.DDD.auth.application.dto.GoogleLoginRequest;
 import com.example.feat1.DDD.auth.application.dto.LoginRequest;
+import com.example.feat1.DDD.auth.application.dto.PasswordResetRequest;
 import com.example.feat1.DDD.auth.application.dto.RefreshTokenRequest;
 import com.example.feat1.DDD.auth.application.dto.RegisterLocalRequest;
+import com.example.feat1.DDD.auth.application.dto.TokenRequest;
 import com.example.feat1.DDD.auth.domain.model.AuthType;
 import com.example.feat1.DDD.identity_context.application.dto.RegisterRequestDto;
 import com.example.feat1.DDD.identity_context.application.dto.RoleEnum;
@@ -25,7 +29,10 @@ import org.springframework.http.HttpStatus;
 class AuthControllerTest {
   private final AuthService authService = mock(AuthService.class);
   private final RegisterUserUseCase registerUserUseCase = mock(RegisterUserUseCase.class);
-  private final AuthController controller = new AuthController(authService, registerUserUseCase);
+  private final AuthAccountRecoveryService authAccountRecoveryService =
+      mock(AuthAccountRecoveryService.class);
+  private final AuthController controller =
+      new AuthController(authService, registerUserUseCase, authAccountRecoveryService);
 
   @Test
   void registerMapsPublicRequestToLocalUserWithDefaultUserRoleAndReturnsTokenPair() {
@@ -37,6 +44,7 @@ class AuthControllerTest {
 
     ArgumentCaptor<RegisterRequestDto> captor = ArgumentCaptor.forClass(RegisterRequestDto.class);
     verify(registerUserUseCase).execute(captor.capture());
+    verify(authAccountRecoveryService).requestEmailVerification("chinh@example.com");
     RegisterRequestDto mappedRequest = captor.getValue();
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -96,5 +104,24 @@ class AuthControllerTest {
     verify(authService).logout("refresh2");
     assertThat(refreshResponse.getBody()).isEqualTo(authResponse);
     assertThat(logoutResponse.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+  }
+
+  @Test
+  void emailVerificationAndPasswordResetEndpointsDelegateToRecoveryService() {
+    var verificationRequest =
+        controller.requestEmailVerification(new EmailRequest("chinh@example.com"));
+    var verifyEmail = controller.verifyEmail(new TokenRequest("verify-token"));
+    var forgotPassword = controller.forgotPassword(new EmailRequest("chinh@example.com"));
+    var resetPassword =
+        controller.resetPassword(new PasswordResetRequest("reset-token", "new-secret"));
+
+    verify(authAccountRecoveryService).requestEmailVerification("chinh@example.com");
+    verify(authAccountRecoveryService).verifyEmail("verify-token");
+    verify(authAccountRecoveryService).requestPasswordReset("chinh@example.com");
+    verify(authAccountRecoveryService).resetPassword("reset-token", "new-secret");
+    assertThat(verificationRequest.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(verifyEmail.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(forgotPassword.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(resetPassword.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
   }
 }

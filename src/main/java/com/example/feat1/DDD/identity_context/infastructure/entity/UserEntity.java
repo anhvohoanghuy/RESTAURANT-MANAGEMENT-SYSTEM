@@ -1,6 +1,7 @@
 package com.example.feat1.DDD.identity_context.infastructure.entity;
 
 import jakarta.persistence.*;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -28,6 +29,11 @@ public class UserEntity {
   @Column(nullable = false, unique = true)
   @ToString.Include
   private String email;
+
+  @Column(nullable = false, columnDefinition = "boolean default false")
+  private boolean emailVerified;
+
+  private Instant emailVerifiedAt;
 
   @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<UserRoleEntity> userRoles = new java.util.HashSet<>();

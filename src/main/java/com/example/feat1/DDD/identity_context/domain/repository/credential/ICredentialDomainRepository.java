@@ -11,4 +11,6 @@ public interface ICredentialDomainRepository {
       AuthProvider provider, String providerUserId);
 
   Optional<Credential> findByUserId(java.util.UUID userId);
+
+  Optional<Credential> findByUserIdAndProvider(java.util.UUID userId, AuthProvider provider);
 }

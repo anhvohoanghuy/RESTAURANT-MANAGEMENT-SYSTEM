@@ -10,4 +10,6 @@ public interface ICredentialRepository extends JpaRepository<CredentialEntity, U
       String provider, String providerUserId);
 
   Optional<CredentialEntity> findByUserId(UUID userId);
+
+  Optional<CredentialEntity> findByUserIdAndAuthProvider(UUID userId, String authProvider);
 }
