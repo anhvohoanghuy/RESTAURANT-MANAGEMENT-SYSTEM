@@ -7,6 +7,8 @@ import java.util.UUID;
 public interface IUserDomainRepository {
   Optional<User> findByEmail(String email);
 
+  Optional<User> findByEmailWithRoles(String email);
+
   Optional<User> findByIdWithRoles(java.util.UUID id);
 
   Optional<User> findById(UUID id);

@@ -28,7 +28,10 @@ public class CustomUserDetailsService {
         .id(userDomain.get().getId())
         .email(userDomain.get().getEmail())
         .roles(userDomain.get().getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
-        .password(credentialDomain.get().getPasswordHash())
+        .password(
+            credentialDomain.get().getPasswordHash() == null
+                ? ""
+                : credentialDomain.get().getPasswordHash())
         .build();
   }
 }

@@ -3,6 +3,7 @@ package com.example.feat1.DDD.auth.infrastructure.presentation;
 import com.example.feat1.DDD.auth.application.AuthService;
 import com.example.feat1.DDD.auth.application.dto.AuthRequest;
 import com.example.feat1.DDD.auth.application.dto.AuthResponse;
+import com.example.feat1.DDD.auth.application.dto.GoogleLoginRequest;
 import com.example.feat1.DDD.auth.application.dto.LoginRequest;
 import com.example.feat1.DDD.auth.application.dto.RefreshTokenRequest;
 import com.example.feat1.DDD.auth.application.dto.RegisterLocalRequest;
@@ -49,6 +50,11 @@ public class AuthController {
         authService.login(toLocalAuthRequest(request.username(), request.password())));
   }
 
+  @PostMapping("/google")
+  public ResponseEntity<AuthResponse> google(@RequestBody GoogleLoginRequest request) {
+    return ResponseEntity.ok(authService.login(toGoogleAuthRequest(request)));
+  }
+
   @PostMapping("/refresh")
   public ResponseEntity<AuthResponse> refresh(@RequestBody RefreshTokenRequest request) {
     return ResponseEntity.ok(authService.refreshToken(requiredRefreshToken(request)));
@@ -62,6 +68,10 @@ public class AuthController {
 
   private AuthRequest toLocalAuthRequest(String username, String password) {
     return new AuthRequest(AuthType.LOCAL, username, password, null);
+  }
+
+  private AuthRequest toGoogleAuthRequest(GoogleLoginRequest request) {
+    return new AuthRequest(AuthType.GOOGLE, null, null, request == null ? null : request.idToken());
   }
 
   private String requiredRefreshToken(RefreshTokenRequest request) {

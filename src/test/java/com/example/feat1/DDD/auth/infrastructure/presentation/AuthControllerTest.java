@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.example.feat1.DDD.auth.application.AuthService;
 import com.example.feat1.DDD.auth.application.dto.AuthRequest;
 import com.example.feat1.DDD.auth.application.dto.AuthResponse;
+import com.example.feat1.DDD.auth.application.dto.GoogleLoginRequest;
 import com.example.feat1.DDD.auth.application.dto.LoginRequest;
 import com.example.feat1.DDD.auth.application.dto.RefreshTokenRequest;
 import com.example.feat1.DDD.auth.application.dto.RegisterLocalRequest;
@@ -66,6 +67,20 @@ class AuthControllerTest {
     assertThat(captor.getValue().getAuthType()).isEqualTo(AuthType.LOCAL);
     assertThat(captor.getValue().getUsername()).isEqualTo("chinh");
     assertThat(captor.getValue().getPassword()).isEqualTo("secret");
+    assertThat(response.getBody()).isEqualTo(authResponse);
+  }
+
+  @Test
+  void googleLoginUsesGoogleAuthTypeAndIdToken() {
+    AuthResponse authResponse = new AuthResponse("access", "refresh", "Bearer", 900_000L, 60_000L);
+    when(authService.login(any(AuthRequest.class))).thenReturn(authResponse);
+
+    var response = controller.google(new GoogleLoginRequest("google-id-token"));
+
+    ArgumentCaptor<AuthRequest> captor = ArgumentCaptor.forClass(AuthRequest.class);
+    verify(authService).login(captor.capture());
+    assertThat(captor.getValue().getAuthType()).isEqualTo(AuthType.GOOGLE);
+    assertThat(captor.getValue().getOathToken()).isEqualTo("google-id-token");
     assertThat(response.getBody()).isEqualTo(authResponse);
   }
 

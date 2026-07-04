@@ -12,5 +12,5 @@ public class AuthRequest {
   private AuthType authType;
   private String username;
   private String password;
-  String oathToken;
+  private String oathToken;
 }

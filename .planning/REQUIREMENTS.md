@@ -25,6 +25,7 @@
 - [ ] **AUTH-008**: Role-protected routes enforce `ADMIN` and `USER` access consistently through Spring Security.
 - [ ] **AUTH-009**: Auth failures return consistent HTTP statuses and response bodies for invalid credentials, expired tokens, revoked tokens, and unauthorized access.
 - [ ] **AUTH-010**: Focused tests cover registration, login success/failure, refresh success/failure, logout revocation, JWT filter behavior, and protected route access.
+- [ ] **AUTH-011**: The backend supports Google OAuth 2 login by verifying Google ID tokens, issuing the existing backend access/refresh token pair, and creating or linking Google credentials according to the documented account-linking policy.
 
 ## Out of Scope
 
@@ -34,7 +35,6 @@
 | Inventory costing | Recipe lines store ingredient, quantity, and unit only. |
 | SKU/variant generation | Topping choices are modeled as topping groups and options. |
 | Public recipe exposure | Recipes are admin/internal catalog data. |
-| Google/OAuth login | Auth Context MVP should stabilize local auth first. |
 | Password reset/email verification | Requires email delivery and account recovery policy, planned after local auth MVP. |
 | Full role/permission admin UI | MVP only needs enough role enforcement to protect existing backend routes. |
 
@@ -57,10 +57,11 @@
 | AUTH-008 | Phase 2 | Planned |
 | AUTH-009 | Phase 2 | Planned |
 | AUTH-010 | Phase 2 | Planned |
+| AUTH-011 | Phase 3 | Planned |
 
 **Coverage:**
-- v1 requirements: 15 total
-- Mapped to phases: 15
+- v1 requirements: 16 total
+- Mapped to phases: 16
 - Unmapped: 0
 
 ---

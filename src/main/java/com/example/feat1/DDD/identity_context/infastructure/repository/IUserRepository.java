@@ -28,4 +28,16 @@ public interface IUserRepository extends JpaRepository<UserEntity, UUID> {
                 WHERE u.id = :id
             """)
   Optional<UserEntity> findByIdWithRoles(UUID id);
+
+  @Query(
+      """
+                SELECT DISTINCT u
+                FROM UserEntity u
+                JOIN FETCH u.userRoles ur
+                JOIN FETCH ur.role r
+                LEFT JOIN FETCH r.rolePermissions rp
+                LEFT JOIN FETCH rp.permission
+                WHERE u.email = :email
+            """)
+  Optional<UserEntity> findByEmailWithRoles(String email);
 }

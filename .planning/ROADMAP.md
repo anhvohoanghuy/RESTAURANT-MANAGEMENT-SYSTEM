@@ -8,6 +8,7 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 
 - [x] **Phase 01: menu-context** - Add restaurant menu catalog CRUD and public read API. Completed: 2026-06-10
 - [ ] **Phase 02: auth-context-mvp** - Stabilize local registration, login, JWT access, refresh-token lifecycle, logout revocation, and role-protected route access.
+- [x] **Phase 03: google-oauth-2-login** - Add Google OAuth 2 ID-token login that issues the existing backend token pair. (completed 2026-07-04)
 
 ## Phase Details
 
@@ -48,3 +49,20 @@ Plans:
 |-------|----------------|--------|-----------|
 | 01. menu-context | 1/1 | Complete | 2026-06-10 |
 | 02. auth-context-mvp | 0/0 | Planned | - |
+
+### Phase 3: Google OAuth 2 login
+
+**Goal:** Add Google OAuth 2 login through backend verification of Google ID tokens, preserving the existing internal JWT access/refresh-token lifecycle and local auth behavior.
+**Requirements**: [AUTH-011]
+**Depends on:** Phase 2
+**Success Criteria** (what must be TRUE):
+  1. Public clients can call `POST /auth/google` with `{ "idToken": "..." }`.
+  2. The backend verifies Google ID token signature, issuer, expiry, configured audience, subject, email, and email verification before issuing internal tokens.
+  3. Existing Google credentials log in the mapped user without storing Google access or refresh tokens.
+  4. New verified Google users are auto-registered with `USER`.
+  5. Existing local users are auto-linked only when Google is authoritative for the email (`gmail.com` or `hd` claim present).
+  6. Focused tests cover create, login, auto-link, rejected non-authoritative link, controller mapping, and HTTP integration.
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 03-01: Implement Google OAuth 2 ID-token login

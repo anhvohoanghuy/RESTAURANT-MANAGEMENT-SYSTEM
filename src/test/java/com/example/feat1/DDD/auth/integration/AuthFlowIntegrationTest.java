@@ -1,11 +1,14 @@
 package com.example.feat1.DDD.auth.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.feat1.DDD.auth.application.auth_service.google.GoogleIdTokenVerifier;
+import com.example.feat1.DDD.auth.application.auth_service.google.GoogleUserInfo;
 import com.example.feat1.DDD.auth.application.auth_service.refresh.RefreshTokenCache;
 import com.example.feat1.DDD.identity_context.infastructure.repository.ICredentialRepository;
 import com.example.feat1.DDD.identity_context.infastructure.repository.IRefreshTokenRepository;
@@ -38,6 +41,7 @@ class AuthFlowIntegrationTest {
   @Autowired private IRefreshTokenRepository refreshTokenRepository;
   @Autowired private IRoleRepository roleRepository;
   @MockitoBean private RefreshTokenCache refreshTokenCache;
+  @MockitoBean private GoogleIdTokenVerifier googleIdTokenVerifier;
 
   @Test
   void startupSeedsUserAndAdminRoles() {
@@ -77,6 +81,48 @@ class AuthFlowIntegrationTest {
     assertThat(credentialRepository.findByAuthProviderAndProviderUserId("LOCAL", username))
         .isPresent();
     assertThat(refreshTokenRepository.findByToken(refreshToken)).isPresent();
+  }
+
+  @Test
+  void googleLoginAutoRegistersUserAndBackendTokenWorksForProfile() throws Exception {
+    String email = unique("google") + "@gmail.com";
+    String googleSubject = "google-sub-" + UUID.randomUUID();
+    when(googleIdTokenVerifier.verify("google-id-token"))
+        .thenReturn(new GoogleUserInfo(googleSubject, email, true, "Google User", null));
+
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/auth/google")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"idToken":"google-id-token"}
+                        """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken").isString())
+            .andExpect(jsonPath("$.refreshToken").isString())
+            .andExpect(jsonPath("$.tokenType").value("Bearer"))
+            .andReturn();
+
+    String accessToken = JsonPath.read(result.getResponse().getContentAsString(), "$.accessToken");
+    String refreshToken =
+        JsonPath.read(result.getResponse().getContentAsString(), "$.refreshToken");
+
+    var user = userRepository.findByEmail(email).orElseThrow();
+    var userWithRoles = userRepository.findByIdWithRoles(user.getId()).orElseThrow();
+    assertThat(user.getName()).isEqualTo("Google User");
+    assertThat(userWithRoles.getRoles()).extracting("name").containsExactly("USER");
+    assertThat(credentialRepository.findByAuthProviderAndProviderUserId("GOOGLE", googleSubject))
+        .isPresent();
+    assertThat(refreshTokenRepository.findByToken(refreshToken)).isPresent();
+
+    mockMvc
+        .perform(get("/users/me").header("Authorization", "Bearer " + accessToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value(email))
+        .andExpect(jsonPath("$.roles[0]").value("USER"))
+        .andExpect(jsonPath("$.passwordHash").doesNotExist());
   }
 
   @Test

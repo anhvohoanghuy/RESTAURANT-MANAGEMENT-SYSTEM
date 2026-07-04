@@ -23,6 +23,11 @@ public class UserDomainRepository implements IUserDomainRepository {
   }
 
   @Override
+  public Optional<User> findByEmailWithRoles(String email) {
+    return UserMapper.userToDomain(jpaRepo.findByEmailWithRoles(email).orElse(null));
+  }
+
+  @Override
   public Optional<User> findByIdWithRoles(UUID id) {
     return UserMapper.userToDomain(jpaRepo.findByIdWithRoles(id).orElse(null));
   }
