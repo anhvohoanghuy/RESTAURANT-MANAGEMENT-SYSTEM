@@ -1,6 +1,7 @@
 package com.example.feat1.DDD.auth.application.auth_service.oauth2;
 
 import com.example.feat1.DDD.auth.TokenSerivce;
+import com.example.feat1.DDD.auth.application.dto.AuthRequestMetadata;
 import com.example.feat1.DDD.auth.application.dto.AuthResponse;
 import com.example.feat1.DDD.identity_context.application.dto.RoleEnum;
 import com.example.feat1.DDD.identity_context.domain.model.aggregate.User;
@@ -29,6 +30,12 @@ public class OAuth2AuthenticationStrategy {
 
   @Transactional
   public AuthResponse authenticate(OAuth2IdentityProviderStrategy providerStrategy, String token) {
+    return authenticate(providerStrategy, token, AuthRequestMetadata.empty());
+  }
+
+  @Transactional
+  public AuthResponse authenticate(
+      OAuth2IdentityProviderStrategy providerStrategy, String token, AuthRequestMetadata metadata) {
     if (token == null || token.isBlank()) {
       throw new AppException(
           providerStrategy.tokenRequiredCode(),
@@ -46,30 +53,35 @@ public class OAuth2AuthenticationStrategy {
 
     return credentialDomainRepository
         .findByProviderAndProviderUserId(providerStrategy.provider(), userInfo.providerUserId())
-        .map(credential -> loginExistingCredential(credential.getUserId()))
-        .orElseGet(() -> createOrLinkUser(providerStrategy, userInfo));
+        .map(credential -> loginExistingCredential(credential.getUserId(), metadata))
+        .orElseGet(() -> createOrLinkUser(providerStrategy, userInfo, metadata));
   }
 
-  private AuthResponse loginExistingCredential(UUID userId) {
+  private AuthResponse loginExistingCredential(UUID userId, AuthRequestMetadata metadata) {
     User user =
         userDomainRepository
             .findByIdWithRoles(userId)
             .orElseThrow(
                 () ->
                     new AppException("USER_NOT_FOUND", "User not found", HttpStatus.UNAUTHORIZED));
-    return tokenSerivce.generateAccessToken(user);
+    return tokenSerivce.generateAccessToken(user, metadata);
   }
 
   private AuthResponse createOrLinkUser(
-      OAuth2IdentityProviderStrategy providerStrategy, OAuth2UserInfo userInfo) {
+      OAuth2IdentityProviderStrategy providerStrategy,
+      OAuth2UserInfo userInfo,
+      AuthRequestMetadata metadata) {
     return userDomainRepository
         .findByEmailWithRoles(userInfo.email())
-        .map(user -> linkExistingUser(providerStrategy, user, userInfo))
-        .orElseGet(() -> registerUser(providerStrategy, userInfo));
+        .map(user -> linkExistingUser(providerStrategy, user, userInfo, metadata))
+        .orElseGet(() -> registerUser(providerStrategy, userInfo, metadata));
   }
 
   private AuthResponse linkExistingUser(
-      OAuth2IdentityProviderStrategy providerStrategy, User user, OAuth2UserInfo userInfo) {
+      OAuth2IdentityProviderStrategy providerStrategy,
+      User user,
+      OAuth2UserInfo userInfo,
+      AuthRequestMetadata metadata) {
     if (!providerStrategy.canAutoLink(userInfo)) {
       throw new AppException(
           providerStrategy.emailNotLinkableCode(),
@@ -83,11 +95,13 @@ public class OAuth2AuthenticationStrategy {
     credentialDomainRepository.save(
         Credential.createOAuth(
             user.getId(), providerStrategy.provider(), userInfo.providerUserId()));
-    return tokenSerivce.generateAccessToken(user);
+    return tokenSerivce.generateAccessToken(user, metadata);
   }
 
   private AuthResponse registerUser(
-      OAuth2IdentityProviderStrategy providerStrategy, OAuth2UserInfo userInfo) {
+      OAuth2IdentityProviderStrategy providerStrategy,
+      OAuth2UserInfo userInfo,
+      AuthRequestMetadata metadata) {
     User user = User.register(displayName(userInfo), userInfo.email());
     markEmailVerifiedIfProviderVerified(user, userInfo);
     userDomainService.validateUser(user);
@@ -100,7 +114,7 @@ public class OAuth2AuthenticationStrategy {
     credentialDomainRepository.save(
         Credential.createOAuth(
             user.getId(), providerStrategy.provider(), userInfo.providerUserId()));
-    return tokenSerivce.generateAccessToken(user);
+    return tokenSerivce.generateAccessToken(user, metadata);
   }
 
   private boolean markEmailVerifiedIfProviderVerified(User user, OAuth2UserInfo userInfo) {

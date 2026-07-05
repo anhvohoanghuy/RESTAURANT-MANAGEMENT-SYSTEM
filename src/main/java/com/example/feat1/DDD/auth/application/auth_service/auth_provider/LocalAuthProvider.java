@@ -40,7 +40,7 @@ public class LocalAuthProvider implements IAuthProvider {
                 () ->
                     new AppException("USER_NOT_FOUND", "User not found", HttpStatus.UNAUTHORIZED));
 
-    return tokenSerivce.generateAccessToken(user);
+    return tokenSerivce.generateAccessToken(user, authRequest.getMetadata());
   }
 
   private AppException invalidCredentials() {

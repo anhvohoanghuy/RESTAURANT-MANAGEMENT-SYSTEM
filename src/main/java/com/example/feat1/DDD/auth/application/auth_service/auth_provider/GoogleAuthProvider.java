@@ -17,6 +17,7 @@ public class GoogleAuthProvider implements IAuthProvider {
   public AuthResponse authenticate(AuthRequest authRequest) {
     return oauth2AuthenticationStrategy.authenticate(
         googleOAuth2IdentityProviderStrategy,
-        authRequest == null ? null : authRequest.getOathToken());
+        authRequest == null ? null : authRequest.getOathToken(),
+        authRequest == null ? null : authRequest.getMetadata());
   }
 }

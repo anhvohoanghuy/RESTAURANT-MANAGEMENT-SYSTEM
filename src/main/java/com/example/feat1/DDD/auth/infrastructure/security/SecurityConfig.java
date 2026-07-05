@@ -32,11 +32,25 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/auth/**")
+                auth.requestMatchers(
+                        HttpMethod.POST,
+                        "/auth/register",
+                        "/auth/login",
+                        "/auth/google",
+                        "/auth/refresh",
+                        "/auth/logout",
+                        "/auth/email/verification/request",
+                        "/auth/email/verify",
+                        "/auth/password/forgot",
+                        "/auth/password/reset")
                     .permitAll()
                     .requestMatchers("/api/auth/**")
                     .permitAll()
+                    .requestMatchers("/auth/sessions", "/auth/sessions/**")
+                    .hasAnyRole("USER", "ADMIN")
                     .requestMatchers(HttpMethod.GET, "/menus/public")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/tables/public")
                     .permitAll()
                     .requestMatchers("/admin/**")
                     .hasRole("ADMIN")

@@ -73,7 +73,7 @@ class GoogleAuthProviderTest {
         .thenReturn(Optional.empty());
     when(userDomainRepository.findByEmailWithRoles("new@gmail.com")).thenReturn(Optional.empty());
     when(roleDomainRepository.findByName("USER")).thenReturn(Optional.of(userRole));
-    when(tokenSerivce.generateAccessToken(any(User.class))).thenReturn(authResponse);
+    when(tokenSerivce.generateAccessToken(any(User.class), any())).thenReturn(authResponse);
 
     AuthResponse response = googleAuthProvider.authenticate(googleRequest("id-token"));
 
@@ -98,11 +98,10 @@ class GoogleAuthProviderTest {
     AuthResponse authResponse = new AuthResponse("access", "refresh", "Bearer", 900_000L, 60_000L);
     when(googleIdTokenVerifier.verify("id-token"))
         .thenReturn(new GoogleUserInfo("google-sub", "existing@gmail.com", true, "Existing", null));
-    when(credentialDomainRepository.findByProviderAndProviderUserId(
-            AuthProvider.GOOGLE, "google-sub"))
+    when(credentialDomainRepository.findByProviderAndProviderUserId(any(), any()))
         .thenReturn(Optional.of(Credential.createOAuth(userId, AuthProvider.GOOGLE, "google-sub")));
     when(userDomainRepository.findByIdWithRoles(userId)).thenReturn(Optional.of(user));
-    when(tokenSerivce.generateAccessToken(user)).thenReturn(authResponse);
+    when(tokenSerivce.generateAccessToken(any(User.class), any())).thenReturn(authResponse);
 
     AuthResponse response = googleAuthProvider.authenticate(googleRequest("id-token"));
 
@@ -122,7 +121,7 @@ class GoogleAuthProviderTest {
         .thenReturn(Optional.empty());
     when(userDomainRepository.findByEmailWithRoles("local@gmail.com"))
         .thenReturn(Optional.of(user));
-    when(tokenSerivce.generateAccessToken(user)).thenReturn(authResponse);
+    when(tokenSerivce.generateAccessToken(any(User.class), any())).thenReturn(authResponse);
 
     AuthResponse response = googleAuthProvider.authenticate(googleRequest("id-token"));
 

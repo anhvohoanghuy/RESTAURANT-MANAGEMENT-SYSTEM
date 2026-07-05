@@ -1,5 +1,6 @@
 package com.example.feat1.DDD.auth.infrastructure.entity;
 
+import com.example.feat1.DDD.auth.application.dto.AuthRequestMetadata;
 import com.example.feat1.DDD.identity_context.infastructure.entity.UserEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -44,8 +45,33 @@ public class RefreshTokenEntity {
   @Column(length = 512)
   private String replacedByToken;
 
+  @Column(length = 128)
+  private String ipAddress;
+
+  @Column(length = 512)
+  private String userAgent;
+
+  private Instant lastUsedAt;
+
   public static RefreshTokenEntity active(String token, UserEntity user, Instant expiryDate) {
-    return new RefreshTokenEntity(null, token, user, expiryDate, Instant.now(), null, null);
+    return active(token, user, expiryDate, AuthRequestMetadata.empty());
+  }
+
+  public static RefreshTokenEntity active(
+      String token, UserEntity user, Instant expiryDate, AuthRequestMetadata metadata) {
+    Instant now = Instant.now();
+    AuthRequestMetadata safeMetadata = metadata == null ? AuthRequestMetadata.empty() : metadata;
+    return new RefreshTokenEntity(
+        null,
+        token,
+        user,
+        expiryDate,
+        now,
+        null,
+        null,
+        safeMetadata.ipAddress(),
+        truncate(safeMetadata.userAgent(), 512),
+        now);
   }
 
   public boolean isRevoked() {
@@ -69,5 +95,23 @@ public class RefreshTokenEntity {
   public void rotateTo(String newRefreshToken, Instant now) {
     revoke(now);
     replacedByToken = newRefreshToken;
+  }
+
+  public void markUsed(Instant now, AuthRequestMetadata metadata) {
+    lastUsedAt = now;
+    AuthRequestMetadata safeMetadata = metadata == null ? AuthRequestMetadata.empty() : metadata;
+    if (safeMetadata.ipAddress() != null) {
+      ipAddress = safeMetadata.ipAddress();
+    }
+    if (safeMetadata.userAgent() != null) {
+      userAgent = truncate(safeMetadata.userAgent(), 512);
+    }
+  }
+
+  private static String truncate(String value, int maxLength) {
+    if (value == null || value.length() <= maxLength) {
+      return value;
+    }
+    return value.substring(0, maxLength);
   }
 }

@@ -2,12 +2,17 @@ package com.example.feat1.DDD.auth.infrastructure.presentation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.feat1.DDD.auth.application.AuthAccountRecoveryService;
+import com.example.feat1.DDD.auth.application.AuthRateLimitService;
 import com.example.feat1.DDD.auth.application.AuthService;
+import com.example.feat1.DDD.auth.application.AuthSessionService;
+import com.example.feat1.DDD.auth.application.LoginLockoutService;
+import com.example.feat1.DDD.auth.application.SecurityAuditService;
 import com.example.feat1.DDD.auth.application.dto.AuthRequest;
 import com.example.feat1.DDD.auth.application.dto.AuthResponse;
 import com.example.feat1.DDD.auth.application.dto.EmailRequest;
@@ -22,17 +27,30 @@ import com.example.feat1.DDD.identity_context.application.dto.RegisterRequestDto
 import com.example.feat1.DDD.identity_context.application.dto.RoleEnum;
 import com.example.feat1.DDD.identity_context.application.usecase.RegisterUserUseCase;
 import com.example.feat1.DDD.identity_context.domain.model.enums.AuthProvider;
+import com.example.feat1.common.exception.AppException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 class AuthControllerTest {
   private final AuthService authService = mock(AuthService.class);
   private final RegisterUserUseCase registerUserUseCase = mock(RegisterUserUseCase.class);
   private final AuthAccountRecoveryService authAccountRecoveryService =
       mock(AuthAccountRecoveryService.class);
+  private final AuthRateLimitService authRateLimitService = mock(AuthRateLimitService.class);
+  private final LoginLockoutService loginLockoutService = mock(LoginLockoutService.class);
+  private final SecurityAuditService securityAuditService = mock(SecurityAuditService.class);
+  private final AuthSessionService authSessionService = mock(AuthSessionService.class);
   private final AuthController controller =
-      new AuthController(authService, registerUserUseCase, authAccountRecoveryService);
+      new AuthController(
+          authService,
+          registerUserUseCase,
+          authAccountRecoveryService,
+          authRateLimitService,
+          loginLockoutService,
+          securityAuditService,
+          authSessionService);
 
   @Test
   void registerMapsPublicRequestToLocalUserWithDefaultUserRoleAndReturnsTokenPair() {
@@ -40,7 +58,8 @@ class AuthControllerTest {
     when(authService.login(any(AuthRequest.class))).thenReturn(authResponse);
 
     var response =
-        controller.register(new RegisterLocalRequest("chinh", "chinh@example.com", "secret"));
+        controller.register(
+            new RegisterLocalRequest("chinh", "chinh@example.com", "secret"), httpRequest());
 
     ArgumentCaptor<RegisterRequestDto> captor = ArgumentCaptor.forClass(RegisterRequestDto.class);
     verify(registerUserUseCase).execute(captor.capture());
@@ -68,13 +87,16 @@ class AuthControllerTest {
     AuthResponse authResponse = new AuthResponse("access", "refresh", "Bearer", 900_000L, 60_000L);
     when(authService.login(any(AuthRequest.class))).thenReturn(authResponse);
 
-    var response = controller.login(new LoginRequest("chinh", "secret"));
+    var response = controller.login(new LoginRequest("chinh", "secret"), httpRequest());
 
     ArgumentCaptor<AuthRequest> captor = ArgumentCaptor.forClass(AuthRequest.class);
     verify(authService).login(captor.capture());
     assertThat(captor.getValue().getAuthType()).isEqualTo(AuthType.LOCAL);
     assertThat(captor.getValue().getUsername()).isEqualTo("chinh");
     assertThat(captor.getValue().getPassword()).isEqualTo("secret");
+    verify(authRateLimitService).checkLogin(any(), any());
+    verify(loginLockoutService).checkNotLocked("chinh");
+    verify(loginLockoutService).recordSuccess("chinh");
     assertThat(response.getBody()).isEqualTo(authResponse);
   }
 
@@ -83,24 +105,25 @@ class AuthControllerTest {
     AuthResponse authResponse = new AuthResponse("access", "refresh", "Bearer", 900_000L, 60_000L);
     when(authService.login(any(AuthRequest.class))).thenReturn(authResponse);
 
-    var response = controller.google(new GoogleLoginRequest("google-id-token"));
+    var response = controller.google(new GoogleLoginRequest("google-id-token"), httpRequest());
 
     ArgumentCaptor<AuthRequest> captor = ArgumentCaptor.forClass(AuthRequest.class);
     verify(authService).login(captor.capture());
     assertThat(captor.getValue().getAuthType()).isEqualTo(AuthType.GOOGLE);
     assertThat(captor.getValue().getOathToken()).isEqualTo("google-id-token");
+    verify(authRateLimitService).checkGoogle(any());
     assertThat(response.getBody()).isEqualTo(authResponse);
   }
 
   @Test
   void refreshAndLogoutUseJsonRefreshTokenRequest() {
     AuthResponse authResponse = new AuthResponse("access", "refresh2", "Bearer", 900_000L, 60_000L);
-    when(authService.refreshToken("refresh1")).thenReturn(authResponse);
+    when(authService.refreshToken(any(), any())).thenReturn(authResponse);
 
-    var refreshResponse = controller.refresh(new RefreshTokenRequest("refresh1"));
-    var logoutResponse = controller.logout(new RefreshTokenRequest("refresh2"));
+    var refreshResponse = controller.refresh(new RefreshTokenRequest("refresh1"), httpRequest());
+    var logoutResponse = controller.logout(new RefreshTokenRequest("refresh2"), httpRequest());
 
-    verify(authService).refreshToken("refresh1");
+    verify(authService).refreshToken(any(), any());
     verify(authService).logout("refresh2");
     assertThat(refreshResponse.getBody()).isEqualTo(authResponse);
     assertThat(logoutResponse.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
@@ -109,11 +132,13 @@ class AuthControllerTest {
   @Test
   void emailVerificationAndPasswordResetEndpointsDelegateToRecoveryService() {
     var verificationRequest =
-        controller.requestEmailVerification(new EmailRequest("chinh@example.com"));
-    var verifyEmail = controller.verifyEmail(new TokenRequest("verify-token"));
-    var forgotPassword = controller.forgotPassword(new EmailRequest("chinh@example.com"));
+        controller.requestEmailVerification(new EmailRequest("chinh@example.com"), httpRequest());
+    var verifyEmail = controller.verifyEmail(new TokenRequest("verify-token"), httpRequest());
+    var forgotPassword =
+        controller.forgotPassword(new EmailRequest("chinh@example.com"), httpRequest());
     var resetPassword =
-        controller.resetPassword(new PasswordResetRequest("reset-token", "new-secret"));
+        controller.resetPassword(
+            new PasswordResetRequest("reset-token", "new-secret"), httpRequest());
 
     verify(authAccountRecoveryService).requestEmailVerification("chinh@example.com");
     verify(authAccountRecoveryService).verifyEmail("verify-token");
@@ -123,5 +148,28 @@ class AuthControllerTest {
     assertThat(verifyEmail.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(forgotPassword.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
     assertThat(resetPassword.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+  }
+
+  @Test
+  void loginReturnsAccountLockedWhenLockoutRecordsThresholdFailure() {
+    when(authService.login(any(AuthRequest.class)))
+        .thenThrow(
+            new AppException(
+                "INVALID_CREDENTIALS", "Invalid username or password", HttpStatus.UNAUTHORIZED));
+    doThrow(new AppException("ACCOUNT_LOCKED", "Account is temporarily locked", HttpStatus.LOCKED))
+        .when(loginLockoutService)
+        .recordFailure("chinh");
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> controller.login(new LoginRequest("chinh", "bad"), httpRequest()))
+        .isInstanceOf(AppException.class)
+        .hasMessage("Account is temporarily locked");
+  }
+
+  private MockHttpServletRequest httpRequest() {
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.setRemoteAddr("127.0.0.1");
+    request.addHeader("User-Agent", "JUnit");
+    return request;
   }
 }

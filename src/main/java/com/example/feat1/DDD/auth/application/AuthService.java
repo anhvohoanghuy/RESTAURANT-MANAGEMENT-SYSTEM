@@ -3,6 +3,7 @@ package com.example.feat1.DDD.auth.application;
 import com.example.feat1.DDD.auth.TokenSerivce;
 import com.example.feat1.DDD.auth.application.auth_service.auth_provider.IAuthProvider;
 import com.example.feat1.DDD.auth.application.dto.AuthRequest;
+import com.example.feat1.DDD.auth.application.dto.AuthRequestMetadata;
 import com.example.feat1.DDD.auth.application.dto.AuthResponse;
 import com.example.feat1.common.exception.AppException;
 import java.util.Map;
@@ -33,6 +34,11 @@ public class AuthService implements IAuthService {
   @Override
   public AuthResponse refreshToken(String refreshToken) {
     return tokenSerivce.refresh(refreshToken);
+  }
+
+  @Override
+  public AuthResponse refreshToken(String refreshToken, AuthRequestMetadata metadata) {
+    return tokenSerivce.refresh(refreshToken, metadata);
   }
 
   @Override

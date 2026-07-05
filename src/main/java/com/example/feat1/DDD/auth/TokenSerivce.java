@@ -3,6 +3,7 @@ package com.example.feat1.DDD.auth;
 import com.example.feat1.DDD.auth.application.auth_service.jwt.JwtProvider;
 import com.example.feat1.DDD.auth.application.auth_service.jwt.TokenType;
 import com.example.feat1.DDD.auth.application.auth_service.refresh.RefreshTokenCache;
+import com.example.feat1.DDD.auth.application.dto.AuthRequestMetadata;
 import com.example.feat1.DDD.auth.application.dto.AuthResponse;
 import com.example.feat1.DDD.auth.infrastructure.entity.RefreshTokenEntity;
 import com.example.feat1.DDD.identity_context.domain.model.aggregate.User;
@@ -33,6 +34,11 @@ public class TokenSerivce {
 
   @Transactional
   public AuthResponse generateAccessToken(User user) {
+    return generateAccessToken(user, AuthRequestMetadata.empty());
+  }
+
+  @Transactional
+  public AuthResponse generateAccessToken(User user, AuthRequestMetadata metadata) {
     String accessToken = jwtProvider.generateToken(user, TokenType.ACCESS);
     String refreshToken = jwtProvider.generateToken(user, TokenType.REFRESH);
     long accessExpiration = jwtProvider.getExpiration(TokenType.ACCESS);
@@ -41,7 +47,7 @@ public class TokenSerivce {
     Instant refreshExpiry = Instant.now().plusMillis(refreshExpiration);
 
     RefreshTokenEntity refreshTokenEntity =
-        RefreshTokenEntity.active(refreshToken, userReference, refreshExpiry);
+        RefreshTokenEntity.active(refreshToken, userReference, refreshExpiry, metadata);
     refreshTokenRepository.save(refreshTokenEntity);
     refreshTokenCache.put(refreshToken, user.getId(), refreshExpiry);
 
@@ -51,6 +57,11 @@ public class TokenSerivce {
 
   @Transactional
   public AuthResponse refresh(String refreshToken) {
+    return refresh(refreshToken, AuthRequestMetadata.empty());
+  }
+
+  @Transactional
+  public AuthResponse refresh(String refreshToken, AuthRequestMetadata metadata) {
     if (refreshToken == null || refreshToken.isEmpty()) {
       throw new AppException(
           "REFRESH_TOKEN_REQUIRED", "Refresh token is required", HttpStatus.BAD_REQUEST);
@@ -103,6 +114,7 @@ public class TokenSerivce {
     if (!cacheHit) {
       refreshTokenCache.put(refreshToken, userId, refreshTokenEntity.getExpiryDate());
     }
+    refreshTokenEntity.markUsed(now, metadata);
 
     String newAccessToken = jwtProvider.generateToken(user.get(), TokenType.ACCESS);
     String newRefreshToken = jwtProvider.generateToken(user.get(), TokenType.REFRESH);
@@ -114,7 +126,7 @@ public class TokenSerivce {
     refreshTokenEntity.rotateTo(newRefreshToken, now);
     refreshTokenRepository.save(refreshTokenEntity);
     RefreshTokenEntity newRefreshTokenEntity =
-        RefreshTokenEntity.active(newRefreshToken, userReference, newRefreshExpiry);
+        RefreshTokenEntity.active(newRefreshToken, userReference, newRefreshExpiry, metadata);
     refreshTokenRepository.save(newRefreshTokenEntity);
     refreshTokenCache.evict(refreshToken);
     refreshTokenCache.put(newRefreshToken, userId, newRefreshExpiry);

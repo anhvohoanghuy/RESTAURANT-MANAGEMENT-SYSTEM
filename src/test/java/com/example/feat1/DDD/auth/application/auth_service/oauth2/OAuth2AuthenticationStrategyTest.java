@@ -53,12 +53,11 @@ class OAuth2AuthenticationStrategyTest {
   void existingProviderCredentialLogsInMappedUser() {
     User user = User.register("OAuth User", "oauth@example.com");
     AuthResponse authResponse = new AuthResponse("access", "refresh", "Bearer", 900_000L, 60_000L);
-    when(credentialDomainRepository.findByProviderAndProviderUserId(
-            AuthProvider.GITHUB, "provider-sub"))
+    when(credentialDomainRepository.findByProviderAndProviderUserId(any(), any()))
         .thenReturn(
             Optional.of(Credential.createOAuth(user.getId(), AuthProvider.GITHUB, "provider-sub")));
     when(userDomainRepository.findByIdWithRoles(user.getId())).thenReturn(Optional.of(user));
-    when(tokenSerivce.generateAccessToken(user)).thenReturn(authResponse);
+    when(tokenSerivce.generateAccessToken(any(User.class), any())).thenReturn(authResponse);
 
     AuthResponse response = oauth2AuthenticationStrategy.authenticate(providerStrategy, "token");
 
@@ -77,7 +76,7 @@ class OAuth2AuthenticationStrategyTest {
     when(userDomainRepository.findByEmailWithRoles("oauth@example.com"))
         .thenReturn(Optional.empty());
     when(roleDomainRepository.findByName("USER")).thenReturn(Optional.of(userRole));
-    when(tokenSerivce.generateAccessToken(any(User.class))).thenReturn(authResponse);
+    when(tokenSerivce.generateAccessToken(any(User.class), any())).thenReturn(authResponse);
 
     AuthResponse response = oauth2AuthenticationStrategy.authenticate(providerStrategy, "token");
 
