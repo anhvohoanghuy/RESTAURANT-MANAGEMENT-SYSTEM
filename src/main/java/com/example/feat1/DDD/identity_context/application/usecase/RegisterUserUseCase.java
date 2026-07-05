@@ -9,7 +9,6 @@ import com.example.feat1.DDD.identity_context.domain.repository.credential.ICred
 import com.example.feat1.DDD.identity_context.domain.repository.role.IRoleDomainRepository;
 import com.example.feat1.DDD.identity_context.domain.repository.user.IUserDomainRepository;
 import com.example.feat1.DDD.identity_context.domain.service.UserDomainService;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -29,21 +28,12 @@ public class RegisterUserUseCase {
     User user = User.register(requestDto.getUsername(), requestDto.getEmail());
     userDomainService.validateUser(user);
 
-    List<String> requestedRoles =
-        requestDto.getRoles() == null || requestDto.getRoles().isEmpty()
-            ? List.of(RoleEnum.USER.getName())
-            : requestDto.getRoles();
-
-    requestedRoles.forEach(
-        roleName -> {
-          RoleEnum roleEnum = RoleEnum.fromName(roleName);
-          Role role =
-              roleDomainRepository
-                  .findByName(roleEnum.getName())
-                  .orElseThrow(
-                      () -> new IllegalStateException("Role seed missing: " + roleEnum.getName()));
-          user.assignRole(role);
-        });
+    Role role =
+        roleDomainRepository
+            .findByName(RoleEnum.USER.getName())
+            .orElseThrow(
+                () -> new IllegalStateException("Role seed missing: " + RoleEnum.USER.getName()));
+    user.assignRole(role);
     userDomainRepository.save(user);
 
     Credential credential =

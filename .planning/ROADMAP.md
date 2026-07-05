@@ -7,12 +7,14 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 ## Phases
 
 - [x] **Phase 01: menu-context** - Add restaurant menu catalog CRUD and public read API. Completed: 2026-06-10
-- [ ] **Phase 02: auth-context-mvp** - Stabilize local registration, login, JWT access, refresh-token lifecycle, logout revocation, and role-protected route access.
+- [x] **Phase 02: auth-context-mvp** - Stabilize local registration, login, JWT access, refresh-token lifecycle, logout revocation, and role-protected route access. (completed 2026-07-05)
 - [x] **Phase 03: google-oauth-2-login** - Add Google OAuth 2 ID-token login that issues the existing backend token pair. (completed 2026-07-04)
 - [x] **Phase 04: email-verification-password-reset** - Add backend token APIs for email verification and local password reset without SMTP/provider integration. Completed: 2026-07-04
 - [x] **Phase 06: auth-hardening** - Add rate limits, local login lockout, auth audit logging, and self-service refresh-session management. Completed: 2026-07-05
 - [x] **Phase 07: menu-order-validation** - Add service-only menu selection validation and price snapshot quotes for future Order/Cart flows. Completed: 2026-07-05
 - [x] **Phase 08: table-context** - Add dining area/table catalog, active public table listing, table validation snapshot service, and minimal dev seed data. (completed 2026-07-05)
+- [x] **Phase 09: order-cart-mvp** - Add authenticated user cart in Order Context using Menu/Table validation ports and stored display snapshots. (completed 2026-07-05)
+- [x] **Phase 10: order-submission-mvp** - Submit authenticated carts into orders that persist table/line snapshots and publish an order-created Kafka event. (completed 2026-07-05)
 
 ## Phase Details
 
@@ -45,21 +47,23 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 02-01: Implement Auth Context MVP vertical slice
+- [x] 02-01: Implement Auth Context MVP vertical slice
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 01. menu-context | 1/1 | Complete | 2026-06-10 |
-| 02. auth-context-mvp | 0/1 | Planned | - |
+| 02. auth-context-mvp | 1/1 | Complete    | 2026-07-05 |
 | 03. google-oauth-2-login | 1/1 | Complete | 2026-07-04 |
 | 04. email-verification-password-reset | 1/1 | Complete | 2026-07-04 |
 | 06. auth-hardening | 1/1 | Complete | 2026-07-05 |
 | 07. menu-order-validation | 1/1 | Complete | 2026-07-05 |
 | 08. table-context | 1/1 | Complete    | 2026-07-05 |
+| 09. order-cart-mvp | 1/1 | Complete    | 2026-07-05 |
+| 10. order-submission-mvp | 1/1 | Complete    | 2026-07-05 |
 
-### Phase 3: Google OAuth 2 login
+### Phase 03: Google OAuth 2 login
 
 **Goal:** Add Google OAuth 2 login through backend verification of Google ID tokens, preserving the existing internal JWT access/refresh-token lifecycle and local auth behavior.
 **Requirements**: [AUTH-011]
@@ -145,3 +149,40 @@ Plans:
 
 Plans:
 - [x] 08-01: Implement Table Context catalog, public listing, validator, and dev seed
+
+### Phase 09: order-cart-mvp
+
+**Goal:** Add an authenticated user cart inside Order Context that stores immutable menu/table snapshots, uses Menu and Table Context validation through ports, and exposes cart item management APIs without checkout/payment.
+**Requirements**: [ORDER-001, ORDER-002, ORDER-003, ORDER-004, ORDER-005, ORDER-006, ORDER-007]
+**Depends on:** Phase 7, Phase 8, Auth/security baseline
+**Success Criteria** (what must be TRUE):
+  1. Order Context owns cart persistence and does not place cart/order logic inside Menu or Table Context.
+  2. Authenticated users have one active cart, scoped by user id, and cannot access another user's cart.
+  3. Cart APIs exist: `GET /cart`, `POST /cart/items`, `PATCH /cart/items/{lineId}`, `DELETE /cart/items/{lineId}`, and `DELETE /cart`.
+  4. Adding an item validates dish/toppings through a `MenuQuotePort` adapter and table through a `TableValidationPort` adapter.
+  5. Line items merge by `dishId + sorted toppingOptionIds`; quantity must be a positive integer and line removal is separate from quantity update.
+  6. Cart reads return stored display snapshots and totals without re-quoting Menu Context on read.
+  7. Focused tests cover owner scoping, merge behavior, quantity validation, item removal/clear, menu/table adapter calls, and API contracts.
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 09-01: Implement authenticated Order Context cart MVP
+
+### Phase 10: order-submission-mvp
+
+**Goal:** Add submitted order persistence and APIs in Order Context so an authenticated user can turn their active cart into an order that preserves table, dish, topping, quantity, and total snapshots, then emits an order-created Kafka event for future consumers.
+**Requirements**: [ORDER-008, ORDER-009, ORDER-010, ORDER-011, ORDER-012, ORDER-013, ORDER-014, ORDER-015]
+**Depends on:** Phase 9
+**Success Criteria** (what must be TRUE):
+  1. Order Context introduces submitted order persistence separate from active cart persistence.
+  2. `POST /orders` submits the authenticated user's active cart into an order.
+  3. Submitted orders persist table snapshot fields: `tableId`, `tableCode`, `tableName`, `areaId`, and `areaName`.
+  4. Submitted orders persist immutable line snapshots from the cart, including dish, toppings, unit price, quantity, and line total.
+  5. Submitting an empty cart or cart without table fails with stable order error codes.
+  6. Successful submission clears the active cart so the user can start a new table/order flow.
+  7. Authenticated users can read only their own orders through order read APIs.
+  8. A successful order submission publishes an `OrderCreated` Kafka event after the order is persisted, with a stable payload for future consumers.
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 10-01: Implement order submission from cart with table snapshot

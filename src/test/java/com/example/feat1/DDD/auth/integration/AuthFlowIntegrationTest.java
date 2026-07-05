@@ -501,6 +501,23 @@ class AuthFlowIntegrationTest {
         .andExpect(jsonPath("$.timestamp").isString());
   }
 
+  @Test
+  void userRoleCannotAccessAdminRoutesAndReceivesGlobalForbiddenError() throws Exception {
+    String username = unique("forbidden");
+    String email = username + "@example.com";
+    register(username, email, "secret123");
+    MvcResult loginResult = login(username, "secret123");
+    String accessToken =
+        JsonPath.read(loginResult.getResponse().getContentAsString(), "$.accessToken");
+
+    mockMvc
+        .perform(get("/admin/phase-02-check").header("Authorization", "Bearer " + accessToken))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("Access is denied"))
+        .andExpect(jsonPath("$.timestamp").isString());
+  }
+
   private String register(String username, String email, String password) throws Exception {
     MvcResult result =
         mockMvc
