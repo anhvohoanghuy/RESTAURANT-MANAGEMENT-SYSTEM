@@ -37,6 +37,9 @@ public class OrderCartEntity {
   @Column(name = "table_id")
   private UUID tableId;
 
+  @Column(name = "table_session_id")
+  private UUID tableSessionId;
+
   @Column(name = "table_code")
   private String tableCode;
 

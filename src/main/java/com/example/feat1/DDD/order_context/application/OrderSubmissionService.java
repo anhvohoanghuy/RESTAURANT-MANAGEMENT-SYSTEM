@@ -58,6 +58,7 @@ public class OrderSubmissionService {
     order.setStatus(OrderStatus.SUBMITTED);
     order.setSubmittedAt(Instant.now());
     order.setTableId(cart.getTableId());
+    order.setTableSessionId(cart.getTableSessionId());
     order.setTableCode(cart.getTableCode());
     order.setTableName(cart.getTableName());
     order.setAreaId(cart.getAreaId());
@@ -124,6 +125,7 @@ public class OrderSubmissionService {
 
   private void clearCartTable(OrderCartEntity cart) {
     cart.setTableId(null);
+    cart.setTableSessionId(null);
     cart.setTableCode(null);
     cart.setTableName(null);
     cart.setAreaId(null);
@@ -142,6 +144,7 @@ public class OrderSubmissionService {
         order.getSubmittedAt(),
         new SubmittedOrderTableSnapshot(
             order.getTableId(),
+            order.getTableSessionId(),
             order.getTableCode(),
             order.getTableName(),
             order.getAreaId(),
@@ -187,6 +190,7 @@ public class OrderSubmissionService {
         order.userId(),
         new OrderCreatedEvent.OrderTable(
             order.table().tableId(),
+            order.table().tableSessionId(),
             order.table().code(),
             order.table().name(),
             order.table().areaId(),

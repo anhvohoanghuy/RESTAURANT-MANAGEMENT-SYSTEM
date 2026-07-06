@@ -23,9 +23,12 @@ import com.example.feat1.DDD.menu_context.domain.model.MenuStatus;
 import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
 import com.example.feat1.DDD.table_context.application.TableCatalogService;
+import com.example.feat1.DDD.table_context.application.TableOperationService;
 import com.example.feat1.DDD.table_context.application.dto.TableDtos.DiningAreaRequest;
 import com.example.feat1.DDD.table_context.application.dto.TableDtos.DiningTableRequest;
+import com.example.feat1.DDD.table_context.application.dto.TableOperationDtos.OpenTableSessionRequest;
 import com.example.feat1.DDD.table_context.domain.model.TableStatus;
+import com.example.feat1.DDD.table_context.domain.port.TableOperationEventPublisher;
 import com.jayway.jsonpath.JsonPath;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -53,6 +56,7 @@ class OrderSubmissionIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private MenuCatalogService menuCatalogService;
   @Autowired private TableCatalogService tableCatalogService;
+  @Autowired private TableOperationService tableOperationService;
 
   @MockitoBean private RefreshTokenCache refreshTokenCache;
   @MockitoBean private GoogleIdTokenVerifier googleIdTokenVerifier;
@@ -60,11 +64,17 @@ class OrderSubmissionIntegrationTest {
   @MockitoBean private AuthRateLimitService authRateLimitService;
   @MockitoBean private LoginLockoutService loginLockoutService;
   @MockitoBean private OrderEventPublisher orderEventPublisher;
+  @MockitoBean private TableOperationEventPublisher tableOperationEventPublisher;
 
   @Test
   void submitCartCreatesOrderPublishesEventAndClearsCart() throws Exception {
     String accessToken = registerAndGetAccessToken("submit");
     UUID tableId = createTable("SUB");
+    UUID tableSessionId =
+        tableOperationService
+            .openSession(
+                tableId, new OpenTableSessionRequest(2, "order submit", null), UUID.randomUUID())
+            .sessionId();
     MenuFixture menu = createMenu("submit");
 
     mockMvc
@@ -74,9 +84,9 @@ class OrderSubmissionIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
-                    {"tableId":"%s","dishId":"%s","toppingOptionIds":["%s"],"quantity":2}
+                    {"tableId":"%s","tableSessionId":"%s","dishId":"%s","toppingOptionIds":["%s"],"quantity":2}
                     """
-                        .formatted(tableId, menu.dishId(), menu.toppingA())))
+                        .formatted(tableId, tableSessionId, menu.dishId(), menu.toppingA())))
         .andExpect(status().isOk());
 
     MvcResult submitResult =
@@ -84,6 +94,7 @@ class OrderSubmissionIntegrationTest {
             .perform(post("/orders").header("Authorization", "Bearer " + accessToken))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.table.tableId").value(tableId.toString()))
+            .andExpect(jsonPath("$.table.tableSessionId").value(tableSessionId.toString()))
             .andExpect(jsonPath("$.table.code").value("SUB-01"))
             .andExpect(jsonPath("$.lines.length()").value(1))
             .andExpect(jsonPath("$.lines[0].dishId").value(menu.dishId().toString()))
@@ -101,6 +112,7 @@ class OrderSubmissionIntegrationTest {
     verify(orderEventPublisher).publishOrderCreated(eventCaptor.capture());
     assertThat(eventCaptor.getValue().orderId()).isEqualTo(UUID.fromString(orderId));
     assertThat(eventCaptor.getValue().table().tableId()).isEqualTo(tableId);
+    assertThat(eventCaptor.getValue().table().tableSessionId()).isEqualTo(tableSessionId);
     assertThat(eventCaptor.getValue().lines()).hasSize(1);
 
     mockMvc

@@ -56,7 +56,21 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/tables/public")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/tables/public/availability")
+                    .permitAll()
                     .requestMatchers("/admin/payments", "/admin/payments/**", "/admin/orders/**")
+                    .hasAnyRole("ADMIN", "STAFF")
+                    .requestMatchers(
+                        "/admin/inventory/**", "/admin/menu/recipes/cost", "/admin/menu/costing")
+                    .hasAnyRole("ADMIN", "STAFF")
+                    .requestMatchers(
+                        "/admin/tables/occupancy",
+                        "/admin/tables/availability",
+                        "/admin/tables/*/sessions",
+                        "/admin/table-sessions/**",
+                        "/admin/tables/*/occupancy",
+                        "/admin/tables/reservations",
+                        "/admin/tables/reservations/**")
                     .hasAnyRole("ADMIN", "STAFF")
                     .requestMatchers("/admin/**")
                     .hasRole("ADMIN")

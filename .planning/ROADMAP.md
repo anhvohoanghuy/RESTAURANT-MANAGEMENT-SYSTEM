@@ -16,6 +16,9 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 - [x] **Phase 09: order-cart-mvp** - Add authenticated user cart in Order Context using Menu/Table validation ports and stored display snapshots. (completed 2026-07-05)
 - [x] **Phase 10: order-submission-mvp** - Submit authenticated carts into orders that persist table/line snapshots and publish an order-created Kafka event. (completed 2026-07-05)
 - [x] **Phase 11: payment-checkout** - Add a Payment Context for manual partial payments, refunds, QR payment request placeholders, order payment summaries, and payment events. (completed 2026-07-06)
+- [x] **Phase 12: table-operations** - Add Table Sessions, occupancy tracking, and reservations for operational table management. Completed: 2026-07-06
+- [x] **Phase 13: inventory-costing** - Add ingredient master data, ingredient costs, recipe cost calculation, and menu margin reads. Completed: 2026-07-06
+- [ ] **Phase 14: inventory-management** - Add stock-on-hand, inventory movements, and operational stock management APIs.
 
 ## Phase Details
 
@@ -64,6 +67,9 @@ Plans:
 | 09. order-cart-mvp | 1/1 | Complete    | 2026-07-05 |
 | 10. order-submission-mvp | 1/1 | Complete    | 2026-07-05 |
 | 11. payment-checkout | 1/1 | Complete | 2026-07-06 |
+| 12. table-operations | 1/1 | Complete | 2026-07-06 |
+| 13. inventory-costing | 1/1 | Complete | 2026-07-06 |
+| 14. inventory-management | 0/1 | Planned | - |
 
 ### Phase 03: Google OAuth 2 login
 
@@ -209,3 +215,59 @@ Plans:
 
 Plans:
 - [x] 11-01: Implement Payment Checkout Context
+
+### Phase 12: table-operations
+
+**Goal:** Add operational table management on top of the existing Table Context catalog: staff/admin can open and close table sessions, track occupancy state, create and manage reservations, and expose availability without moving order ownership into Table Context.
+**Requirements**: [TABLE-008, TABLE-009, TABLE-010, TABLE-011, TABLE-012, TABLE-013, TABLE-014, TABLE-015, TABLE-016]
+**Depends on:** Phase 08, Phase 09, Phase 10
+**Success Criteria** (what must be TRUE):
+  1. Table Context owns operational table sessions separately from the static dining area/table catalog.
+  2. Staff/admin can open one active session per table and close/cancel it with stable state transitions.
+  3. Table occupancy is derived or maintained as `AVAILABLE`, `OCCUPIED`, `RESERVED`, `CLEANING`, or `OUT_OF_SERVICE`.
+  4. Reservations can be created, confirmed, seated, cancelled, no-showed, and completed.
+  5. Reservation time windows cannot overlap for the same table in active reservation states.
+  6. Order/Cart can optionally reference a table session through a port without moving order logic into Table Context.
+  7. Public/staff availability reads expose table availability by time window and party size.
+  8. Table operation events are published after commit for future consumers, without adding consumers in this phase.
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 12-01: Implement Table Operations
+
+### Phase 13: inventory-costing
+
+**Goal:** Add a backend Inventory Context for ingredient master data and ingredient costs, link menu recipes to inventory ingredients, and expose admin/staff recipe/menu costing reads without changing public menu, order, payment, or stock behavior.
+**Requirements**: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-009, INV-010, INV-011]
+**Depends on:** Phase 01, Phase 07, Phase 09, Phase 10, Phase 11
+**Success Criteria** (what must be TRUE):
+  1. Inventory Context owns ingredient master data and ingredient cost records separately from Menu Context.
+  2. Admin/staff can create, update, archive, list, and cost ingredients under `/admin/inventory/**`.
+  3. Recipe lines can optionally reference an inventory ingredient while preserving existing free-text recipe behavior.
+  4. Recipe cost calculation uses ingredient costs and unit conversion to produce line and total estimated cost.
+  5. Missing ingredient links, missing costs, and unsupported unit conversion are surfaced explicitly.
+  6. Admin/staff can inspect menu item cost and gross margin while public menu responses remain unchanged.
+  7. Costing does not deduct stock, change sell prices, alter order totals, or affect payment behavior in this phase.
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 13-01: Implement Inventory Costing Foundation
+
+### Phase 14: inventory-management
+
+**Goal:** Extend Inventory Context from costing into operational stock management with stock-on-hand balances, inventory movement records, manual receipts/adjustments/waste, and low-stock visibility while keeping automatic order deduction as an explicit later integration decision.
+**Requirements**: [INV-012, INV-013, INV-014, INV-015, INV-016, INV-017, INV-018, INV-019, INV-020, INV-021]
+**Depends on:** Phase 13
+**Success Criteria** (what must be TRUE):
+  1. Inventory Context persists stock balances per ingredient for a default stock location.
+  2. Staff/admin can record inventory movements for receipts, adjustments, waste, and corrections.
+  3. Movement records are immutable audit facts with quantity, unit, reason, reference, actor metadata where available, and timestamp.
+  4. Stock-on-hand reads use movement/balance data and expose current quantity per ingredient.
+  5. Outbound movements cannot drive stock negative unless an explicit adjustment path is used.
+  6. Ingredients can define low-stock thresholds and staff/admin can list low-stock ingredients.
+  7. Public menu, order submission, payment, and recipe costing contracts remain backward compatible.
+  8. Focused tests cover stock movement validation, balance updates, unit conversion, low-stock reads, and authorization.
+**Plans:** 0/1 plans complete
+
+Plans:
+- [ ] 14-01: Implement Inventory Stock Management Foundation

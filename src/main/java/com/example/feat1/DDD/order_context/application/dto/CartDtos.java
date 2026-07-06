@@ -8,7 +8,11 @@ public final class CartDtos {
   private CartDtos() {}
 
   public record AddCartItemRequest(
-      UUID tableId, UUID dishId, List<UUID> toppingOptionIds, Integer quantity) {}
+      UUID tableId,
+      UUID tableSessionId,
+      UUID dishId,
+      List<UUID> toppingOptionIds,
+      Integer quantity) {}
 
   public record UpdateCartLineQuantityRequest(Integer quantity) {}
 
@@ -20,7 +24,7 @@ public final class CartDtos {
       BigDecimal total) {}
 
   public record CartTableSnapshotResponse(
-      UUID tableId, String code, String name, UUID areaId, String areaName) {}
+      UUID tableId, UUID tableSessionId, String code, String name, UUID areaId, String areaName) {}
 
   public record CartLineResponse(
       UUID lineId,

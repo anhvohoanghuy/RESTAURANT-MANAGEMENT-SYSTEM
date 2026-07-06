@@ -27,7 +27,7 @@ public final class OrderDtos {
       BigDecimal remainingAmount) {}
 
   public record SubmittedOrderTableSnapshot(
-      UUID tableId, String code, String name, UUID areaId, String areaName) {}
+      UUID tableId, UUID tableSessionId, String code, String name, UUID areaId, String areaName) {}
 
   public record SubmittedOrderLineResponse(
       UUID lineId,

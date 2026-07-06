@@ -2,24 +2,24 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 11
-status: implemented
-last_updated: "2026-07-06T19:06:26.000+07:00"
+current_phase: 14
+status: planned
+last_updated: "2026-07-06T21:05:00.000+07:00"
 last_activity: 2026-07-06
 progress:
-  total_phases: 11
-  completed_phases: 10
-  total_plans: 10
-  completed_plans: 10
-  percent: 91
-stopped_at: Phase 11 Payment Checkout implemented and verified
+  total_phases: 13
+  completed_phases: 12
+  total_plans: 13
+  completed_plans: 12
+  percent: 92
+stopped_at: Phase 14 Inventory Management planned and ready to discuss/execute
 ---
 
 # State
 
-**Status:** Implemented
-**Current Phase:** 11
-**Plans:** 10/10 complete overall; Phase 11 implementation verified
+**Status:** Planned
+**Current Phase:** 14
+**Plans:** 12/13 complete overall; Phase 14 ready to discuss/execute
 **Last Activity:** 2026-07-06
 
 ## Notes
@@ -36,6 +36,11 @@ stopped_at: Phase 11 Payment Checkout implemented and verified
 - Phase 09 implemented an authenticated Order Context cart MVP using Menu/Table validation ports and stored snapshots.
 - Phase 10 implemented submitted order persistence from cart, preserving table/line snapshots and publishing an order-created Kafka event.
 - Phase 11 implemented Payment Context checkout: manual partial payments, refunds, QR payment request placeholders, order payment summaries, and payment events. Full Maven test suite passed on 2026-07-06.
+- Phase 12 added for Table Operations: table sessions, occupancy, reservations, availability, order-session linkage, and table-operation events.
+- Phase 12 planned with one implementation plan covering sessions, occupancy, reservations, availability, optional Order/Cart session linkage, and events.
+- Phase 12 implemented and verified with focused integration coverage plus full Maven test suite on 2026-07-06.
+- Phase 13 implemented Inventory Costing: ingredient master data, ingredient cost records, recipe ingredient links, recipe cost calculation, and menu margin reads. Full Maven test suite passed on 2026-07-06.
+- Phase 14 planned for Inventory Management: stock-on-hand balances, inventory movements, manual receipts/adjustments/waste, and low-stock visibility.
 
 ## Accumulated Context
 
@@ -50,3 +55,6 @@ stopped_at: Phase 11 Payment Checkout implemented and verified
 - Phase 09 completed: Order Cart MVP in Order Context.
 - Phase 10 completed: Order Submission MVP in Order Context with Kafka order-created event publishing.
 - Phase 11 added: Payment Checkout in a separate Payment Context.
+- Phase 12 added: Table Operations for sessions, occupancy, and reservations.
+- Phase 13 added and completed: Inventory Costing as a separate Inventory Context, keeping stock movements deferred.
+- Phase 14 added: Inventory Management continues the Inventory Context with stock movements and balances while keeping automatic order deduction as a later integration decision.

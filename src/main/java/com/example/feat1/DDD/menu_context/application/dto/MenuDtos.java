@@ -32,7 +32,12 @@ public final class MenuDtos {
 
   public record RecipeRequest(
       RecipeTargetType targetType, UUID targetId, String name, List<Line> lines) {
-    public record Line(String ingredient, BigDecimal quantity, String unit, Integer sortOrder) {}
+    public record Line(
+        UUID ingredientId,
+        String ingredient,
+        BigDecimal quantity,
+        String unit,
+        Integer sortOrder) {}
   }
 
   public record CategoryResponse(
@@ -61,7 +66,12 @@ public final class MenuDtos {
   public record RecipeResponse(
       UUID id, RecipeTargetType targetType, UUID targetId, String name, List<Line> lines) {
     public record Line(
-        UUID id, String ingredient, BigDecimal quantity, String unit, int sortOrder) {}
+        UUID id,
+        UUID ingredientId,
+        String ingredient,
+        BigDecimal quantity,
+        String unit,
+        int sortOrder) {}
   }
 
   public record PublicMenuResponse(List<PublicCategory> categories) {}

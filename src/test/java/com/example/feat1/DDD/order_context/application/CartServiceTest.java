@@ -10,6 +10,7 @@ import com.example.feat1.DDD.order_context.application.dto.CartDtos.AddCartItemR
 import com.example.feat1.DDD.order_context.domain.model.CartStatus;
 import com.example.feat1.DDD.order_context.domain.model.OrderDomainException;
 import com.example.feat1.DDD.order_context.domain.port.MenuQuotePort;
+import com.example.feat1.DDD.order_context.domain.port.TableSessionValidationPort;
 import com.example.feat1.DDD.order_context.domain.port.TableValidationPort;
 import com.example.feat1.DDD.order_context.domain.snapshot.OrderMenuQuote;
 import com.example.feat1.DDD.order_context.domain.snapshot.OrderTableSnapshot;
@@ -31,6 +32,7 @@ class CartServiceTest {
   private OrderCartLineRepository lineRepository;
   private MenuQuotePort menuQuotePort;
   private TableValidationPort tableValidationPort;
+  private TableSessionValidationPort tableSessionValidationPort;
   private CartService service;
 
   private final UUID userId = UUID.randomUUID();
@@ -47,7 +49,14 @@ class CartServiceTest {
     lineRepository = mock(OrderCartLineRepository.class);
     menuQuotePort = mock(MenuQuotePort.class);
     tableValidationPort = mock(TableValidationPort.class);
-    service = new CartService(cartRepository, lineRepository, menuQuotePort, tableValidationPort);
+    tableSessionValidationPort = mock(TableSessionValidationPort.class);
+    service =
+        new CartService(
+            cartRepository,
+            lineRepository,
+            menuQuotePort,
+            tableValidationPort,
+            tableSessionValidationPort);
 
     OrderCartEntity cart = new OrderCartEntity();
     cart.setId(cartId);
@@ -101,10 +110,10 @@ class CartServiceTest {
   void addItemMergesByDishAndSortedToppings() {
     var first =
         service.addItem(
-            userId, new AddCartItemRequest(tableId, dishId, List.of(toppingB, toppingA), 2));
+            userId, new AddCartItemRequest(tableId, null, dishId, List.of(toppingB, toppingA), 2));
     var second =
         service.addItem(
-            userId, new AddCartItemRequest(tableId, dishId, List.of(toppingA, toppingB), 3));
+            userId, new AddCartItemRequest(tableId, null, dishId, List.of(toppingA, toppingB), 3));
 
     assertThat(first.lines()).hasSize(1);
     assertThat(second.lines()).hasSize(1);
@@ -116,7 +125,9 @@ class CartServiceTest {
   @Test
   void addItemRejectsInvalidQuantityWithStableCode() {
     assertThatThrownBy(
-            () -> service.addItem(userId, new AddCartItemRequest(tableId, dishId, List.of(), 0)))
+            () ->
+                service.addItem(
+                    userId, new AddCartItemRequest(tableId, null, dishId, List.of(), 0)))
         .isInstanceOf(OrderDomainException.class)
         .extracting("code")
         .isEqualTo(OrderDomainException.QUANTITY_INVALID);
@@ -124,12 +135,12 @@ class CartServiceTest {
 
   @Test
   void cartCannotSwitchTableUntilCleared() {
-    service.addItem(userId, new AddCartItemRequest(tableId, dishId, List.of(), 1));
+    service.addItem(userId, new AddCartItemRequest(tableId, null, dishId, List.of(), 1));
 
     assertThatThrownBy(
             () ->
                 service.addItem(
-                    userId, new AddCartItemRequest(UUID.randomUUID(), dishId, List.of(), 1)))
+                    userId, new AddCartItemRequest(UUID.randomUUID(), null, dishId, List.of(), 1)))
         .isInstanceOf(OrderDomainException.class)
         .extracting("code")
         .isEqualTo(OrderDomainException.CART_TABLE_MISMATCH);

@@ -67,6 +67,7 @@ public final class MenuCatalogMapper {
                 line ->
                     new RecipeLine(
                         line.getId(),
+                        line.getIngredientId(),
                         line.getIngredient(),
                         line.getQuantity(),
                         line.getUnit(),
@@ -78,6 +79,7 @@ public final class MenuCatalogMapper {
     RecipeLineEntity entity = new RecipeLineEntity();
     entity.setId(line.getId());
     entity.setRecipe(recipe);
+    entity.setIngredientId(line.getIngredientId());
     entity.setIngredient(line.getIngredient());
     entity.setQuantity(line.getQuantity());
     entity.setUnit(line.getUnit());

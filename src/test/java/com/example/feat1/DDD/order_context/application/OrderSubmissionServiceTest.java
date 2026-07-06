@@ -86,6 +86,7 @@ class OrderSubmissionServiceTest {
   @Test
   void submitCopiesCartSnapshotsClearsCartAndPublishesEvent() {
     OrderCartEntity cart = cartWithTable();
+    UUID tableSessionId = cart.getTableSessionId();
     OrderCartLineEntity cartLine = cartLine(cart);
     when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
     when(cartLineRepository.findByCart_IdOrderByIdAsc(cartId)).thenReturn(List.of(cartLine));
@@ -93,6 +94,7 @@ class OrderSubmissionServiceTest {
     var response = service.submit(userId);
 
     assertThat(response.table().tableId()).isEqualTo(tableId);
+    assertThat(response.table().tableSessionId()).isEqualTo(tableSessionId);
     assertThat(response.table().code()).isEqualTo("A01");
     assertThat(response.lines()).hasSize(1);
     assertThat(response.lines().get(0).dishId()).isEqualTo(dishId);
@@ -100,6 +102,7 @@ class OrderSubmissionServiceTest {
     assertThat(response.total()).isEqualByComparingTo("160000");
     assertThat(response.payment().paymentStatus()).isEqualTo("UNPAID");
     assertThat(cart.getTableId()).isNull();
+    assertThat(cart.getTableSessionId()).isNull();
 
     verify(cartLineRepository).deleteByCart_Id(cartId);
     ArgumentCaptor<OrderCreatedEvent> eventCaptor =
@@ -110,6 +113,7 @@ class OrderSubmissionServiceTest {
     assertThat(event.orderId()).isEqualTo(response.orderId());
     assertThat(event.userId()).isEqualTo(userId);
     assertThat(event.table().tableId()).isEqualTo(tableId);
+    assertThat(event.table().tableSessionId()).isEqualTo(response.table().tableSessionId());
     assertThat(event.lines()).hasSize(1);
     assertThat(event.total()).isEqualByComparingTo("160000");
   }
@@ -158,6 +162,7 @@ class OrderSubmissionServiceTest {
     cart.setUserId(userId);
     cart.setStatus(CartStatus.ACTIVE);
     cart.setTableId(tableId);
+    cart.setTableSessionId(UUID.randomUUID());
     cart.setTableCode("A01");
     cart.setTableName("Table A01");
     cart.setAreaId(areaId);

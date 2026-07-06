@@ -45,6 +45,15 @@
 - [x] **TABLE-005**: Dining tables have a stable unique `code` for QR/display usage, while capacity remains optional but must be positive when present.
 - [x] **TABLE-006**: The Table Context provides a service-only validator that returns a table snapshot for future Order Context flows and fails with stable error codes `TABLE_NOT_ORDERABLE` and `TABLE_AREA_NOT_ORDERABLE`.
 - [x] **TABLE-007**: The application provides minimal dev/test seed data for sample dining areas and tables without requiring production fixture data.
+- [x] **TABLE-008**: The backend introduces table sessions as operational records separate from the dining table catalog.
+- [x] **TABLE-009**: Staff/admin can open, close, and cancel table sessions while enforcing at most one active session per table.
+- [x] **TABLE-010**: The backend tracks or derives occupancy state for dining tables, including `AVAILABLE`, `OCCUPIED`, `RESERVED`, `CLEANING`, and `OUT_OF_SERVICE`.
+- [x] **TABLE-011**: Staff/admin can create and manage reservations with customer contact, party size, time window, and status.
+- [x] **TABLE-012**: Active reservations cannot overlap for the same table and time window.
+- [x] **TABLE-013**: Reservations support stable status transitions such as `PENDING`, `CONFIRMED`, `SEATED`, `CANCELLED`, `NO_SHOW`, and `COMPLETED`.
+- [x] **TABLE-014**: Order/Cart can optionally reference a table session through ports while Order Context remains the owner of cart/order logic.
+- [x] **TABLE-015**: The application exposes availability reads by time window and party size for staff/public use.
+- [x] **TABLE-016**: Table session, occupancy, and reservation changes publish stable events after commit without adding consumers in this phase.
 
 ### Order Context
 
@@ -81,6 +90,30 @@
 - [x] **PAY-013**: The application exposes order-scoped payment history and admin/staff global payment history with cursor pagination and basic filters.
 - [x] **PAY-014**: Successful payment/refund operations publish `PaymentRecorded`, `PaymentRefunded`, and `OrderPaymentCompleted` Kafka events after commit, with no consumers in this phase.
 
+### Inventory Context
+
+- [x] **INV-001**: The backend introduces an Inventory Context that owns ingredient master data separately from Menu Context recipes.
+- [x] **INV-002**: The application persists ingredients with name, base unit, status, and optional descriptive metadata.
+- [x] **INV-003**: The application persists ingredient cost records with unit cost, cost unit, effective timestamp, and optional source/note.
+- [x] **INV-004**: Admin/staff can create, update, archive, list, and add cost records for ingredients through `/admin/inventory/**`.
+- [x] **INV-005**: Recipe lines can optionally reference an inventory ingredient id while preserving existing free-text ingredient behavior.
+- [x] **INV-006**: Recipe costing computes line and total estimated cost from recipe quantities, ingredient costs, and supported unit conversion.
+- [x] **INV-007**: Costing responses explicitly surface missing ingredient links, missing current cost records, inactive ingredients, and unsupported unit conversions.
+- [x] **INV-008**: Admin/staff can read recipe cost by recipe target and menu item cost/margin summaries.
+- [x] **INV-009**: Public menu APIs do not expose recipe cost, ingredient cost, or margin data.
+- [x] **INV-010**: Inventory costing does not change sell prices, submitted order totals, payment accounting, or stock levels in this phase.
+- [x] **INV-011**: Focused tests cover ingredient management, cost record selection, unit conversion, recipe costing, margin reads, authorization, and backward compatibility.
+- [ ] **INV-012**: The backend persists stock-on-hand balances for inventory ingredients in a default stock location.
+- [ ] **INV-013**: The backend persists immutable inventory movement records for receipts, adjustments, waste, corrections, and stock count differences.
+- [ ] **INV-014**: Staff/admin can record inbound stock receipts with quantity, unit, optional source/reference, and note.
+- [ ] **INV-015**: Staff/admin can record outbound waste and operational adjustments with reason codes and validation.
+- [ ] **INV-016**: Stock movement quantities use ingredient units and supported conversions consistently with inventory costing.
+- [ ] **INV-017**: Outbound movements cannot make stock negative except through explicit adjustment/correction flows.
+- [ ] **INV-018**: Ingredients can store low-stock thresholds and staff/admin can list low-stock ingredients.
+- [ ] **INV-019**: Stock reads expose current balance, latest movement time, and low-stock state without exposing public menu cost data.
+- [ ] **INV-020**: Inventory movement APIs return stable errors for invalid movement type, invalid quantity, missing ingredient, inactive ingredient, unsupported conversion, and insufficient stock.
+- [ ] **INV-021**: Focused tests cover movement validation, stock balance updates, unit conversion, low-stock reads, authorization, and backward compatibility with recipe costing.
+
 ## Out of Scope
 
 | Feature | Reason |
@@ -88,8 +121,8 @@
 | Real payment gateway integration | Phase 11 creates QR/provider request placeholders only; provider calls, redirects, and webhooks are deferred. |
 | Kitchen/display workflow | Phase 10 persists submitted orders only; fulfillment state is deferred. |
 | Kafka consumers | Phases 10 and 11 publish events only; downstream consumer services are deferred. |
-| Table sessions/occupancy/reservations | Phase 08 is table catalog only; operational table state is deferred. |
-| Inventory costing | Recipe lines store ingredient, quantity, and unit only. |
+| Real stock deduction from orders | Phase 14 prepares operational stock management; automatic recipe-based deduction from order/payment/kitchen events remains a later integration decision. |
+| Purchase orders and supplier management | Phase 14 focuses on stock movements and balances, not procurement workflows. |
 | SKU/variant generation | Topping choices are modeled as topping groups and options. |
 | Public recipe exposure | Recipes are admin/internal catalog data. |
 | SMTP/provider email delivery | Phase 04 defines notification ports and token APIs only; real delivery provider integration is deferred. |
@@ -132,6 +165,15 @@
 | TABLE-005 | Phase 8 | Complete |
 | TABLE-006 | Phase 8 | Complete |
 | TABLE-007 | Phase 8 | Complete |
+| TABLE-008 | Phase 12 | Complete |
+| TABLE-009 | Phase 12 | Complete |
+| TABLE-010 | Phase 12 | Complete |
+| TABLE-011 | Phase 12 | Complete |
+| TABLE-012 | Phase 12 | Complete |
+| TABLE-013 | Phase 12 | Complete |
+| TABLE-014 | Phase 12 | Complete |
+| TABLE-015 | Phase 12 | Complete |
+| TABLE-016 | Phase 12 | Complete |
 | ORDER-001 | Phase 9 | Complete |
 | ORDER-002 | Phase 9 | Complete |
 | ORDER-003 | Phase 9 | Complete |
@@ -161,12 +203,33 @@
 | PAY-012 | Phase 11 | Complete |
 | PAY-013 | Phase 11 | Complete |
 | PAY-014 | Phase 11 | Complete |
+| INV-001 | Phase 13 | Complete |
+| INV-002 | Phase 13 | Complete |
+| INV-003 | Phase 13 | Complete |
+| INV-004 | Phase 13 | Complete |
+| INV-005 | Phase 13 | Complete |
+| INV-006 | Phase 13 | Complete |
+| INV-007 | Phase 13 | Complete |
+| INV-008 | Phase 13 | Complete |
+| INV-009 | Phase 13 | Complete |
+| INV-010 | Phase 13 | Complete |
+| INV-011 | Phase 13 | Complete |
+| INV-012 | Phase 14 | Planned |
+| INV-013 | Phase 14 | Planned |
+| INV-014 | Phase 14 | Planned |
+| INV-015 | Phase 14 | Planned |
+| INV-016 | Phase 14 | Planned |
+| INV-017 | Phase 14 | Planned |
+| INV-018 | Phase 14 | Planned |
+| INV-019 | Phase 14 | Planned |
+| INV-020 | Phase 14 | Planned |
+| INV-021 | Phase 14 | Planned |
 
 **Coverage:**
-- v1 requirements: 61 total
-- Mapped to phases: 61
+- v1 requirements: 91 total
+- Mapped to phases: 91
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-10*
-*Last updated: 2026-07-05 for Order Submission MVP*
+*Last updated: 2026-07-06 for Inventory Costing implementation and Inventory Management planning*

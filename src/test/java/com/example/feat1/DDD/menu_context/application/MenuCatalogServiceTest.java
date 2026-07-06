@@ -135,14 +135,14 @@ class MenuCatalogServiceTest {
                 RecipeTargetType.DISH,
                 dishId,
                 "Milk tea base",
-                List.of(new RecipeRequest.Line("Tea", BigDecimal.valueOf(200), "ml", 1))));
+                List.of(new RecipeRequest.Line(null, "Tea", BigDecimal.valueOf(200), "ml", 1))));
     var toppingRecipe =
         service.upsertRecipe(
             new RecipeRequest(
                 RecipeTargetType.TOPPING_OPTION,
                 optionId,
                 "Pearl batch",
-                List.of(new RecipeRequest.Line("Tapioca", BigDecimal.valueOf(30), "g", 1))));
+                List.of(new RecipeRequest.Line(null, "Tapioca", BigDecimal.valueOf(30), "g", 1))));
 
     assertThat(dishRecipe.targetType()).isEqualTo(RecipeTargetType.DISH);
     assertThat(toppingRecipe.targetType()).isEqualTo(RecipeTargetType.TOPPING_OPTION);

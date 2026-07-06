@@ -10,4 +10,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface DishRepository extends JpaRepository<DishEntity, UUID> {
   List<DishEntity> findByCategory_IdInAndStatusOrderBySortOrderAscNameAsc(
       Collection<UUID> categoryIds, MenuStatus status);
+
+  List<DishEntity> findByStatusOrderBySortOrderAscNameAsc(MenuStatus status);
 }

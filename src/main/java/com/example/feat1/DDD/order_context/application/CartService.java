@@ -9,8 +9,10 @@ import com.example.feat1.DDD.order_context.application.dto.CartDtos.UpdateCartLi
 import com.example.feat1.DDD.order_context.domain.model.CartStatus;
 import com.example.feat1.DDD.order_context.domain.model.OrderDomainException;
 import com.example.feat1.DDD.order_context.domain.port.MenuQuotePort;
+import com.example.feat1.DDD.order_context.domain.port.TableSessionValidationPort;
 import com.example.feat1.DDD.order_context.domain.port.TableValidationPort;
 import com.example.feat1.DDD.order_context.domain.snapshot.OrderMenuQuote;
+import com.example.feat1.DDD.order_context.domain.snapshot.OrderTableSessionSnapshot;
 import com.example.feat1.DDD.order_context.domain.snapshot.OrderTableSnapshot;
 import com.example.feat1.DDD.order_context.domain.snapshot.OrderToppingSnapshot;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartEntity;
@@ -35,6 +37,7 @@ public class CartService {
   private final OrderCartLineRepository lineRepository;
   private final MenuQuotePort menuQuotePort;
   private final TableValidationPort tableValidationPort;
+  private final TableSessionValidationPort tableSessionValidationPort;
 
   @Transactional
   public CartResponse getCart(UUID userId) {
@@ -51,8 +54,14 @@ public class CartService {
 
     OrderCartEntity cart = ensureCart(userId);
     OrderTableSnapshot table = tableValidationPort.validate(tableId);
+    UUID requestedSessionId = request.tableSessionId();
+    assertSameOrEmptySession(cart, requestedSessionId);
+    UUID sessionIdToValidate =
+        requestedSessionId == null ? cart.getTableSessionId() : requestedSessionId;
+    OrderTableSessionSnapshot session =
+        tableSessionValidationPort.validateOpenSession(sessionIdToValidate, tableId);
     assertSameOrEmptyTable(cart, table.tableId());
-    applyTableSnapshot(cart, table);
+    applyTableSnapshot(cart, table, session);
 
     List<UUID> normalizedToppings = normalizeToppingOptionIds(request.toppingOptionIds());
     String toppingKey = toppingKey(normalizedToppings);
@@ -143,8 +152,18 @@ public class CartService {
     }
   }
 
-  private void applyTableSnapshot(OrderCartEntity cart, OrderTableSnapshot table) {
+  private void assertSameOrEmptySession(OrderCartEntity cart, UUID tableSessionId) {
+    if (cart.getTableSessionId() != null
+        && tableSessionId != null
+        && !cart.getTableSessionId().equals(tableSessionId)) {
+      throw OrderDomainException.cartTableMismatch();
+    }
+  }
+
+  private void applyTableSnapshot(
+      OrderCartEntity cart, OrderTableSnapshot table, OrderTableSessionSnapshot session) {
     cart.setTableId(table.tableId());
+    cart.setTableSessionId(session == null ? null : session.sessionId());
     cart.setTableCode(table.code());
     cart.setTableName(table.name());
     cart.setAreaId(table.areaId());
@@ -153,6 +172,7 @@ public class CartService {
 
   private void clearTableSnapshot(OrderCartEntity cart) {
     cart.setTableId(null);
+    cart.setTableSessionId(null);
     cart.setTableCode(null);
     cart.setTableName(null);
     cart.setAreaId(null);
@@ -212,6 +232,7 @@ public class CartService {
     }
     return new CartTableSnapshotResponse(
         cart.getTableId(),
+        cart.getTableSessionId(),
         cart.getTableCode(),
         cart.getTableName(),
         cart.getAreaId(),

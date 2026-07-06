@@ -5,12 +5,23 @@ import java.util.UUID;
 
 public class RecipeLine {
   private final UUID id;
+  private final UUID ingredientId;
   private final String ingredient;
   private final BigDecimal quantity;
   private final String unit;
   private final int sortOrder;
 
   public RecipeLine(UUID id, String ingredient, BigDecimal quantity, String unit, int sortOrder) {
+    this(id, null, ingredient, quantity, unit, sortOrder);
+  }
+
+  public RecipeLine(
+      UUID id,
+      UUID ingredientId,
+      String ingredient,
+      BigDecimal quantity,
+      String unit,
+      int sortOrder) {
     if (ingredient == null || ingredient.isBlank()) {
       throw new IllegalArgumentException("Recipe line ingredient is required");
     }
@@ -21,6 +32,7 @@ public class RecipeLine {
       throw new IllegalArgumentException("Recipe line unit is required");
     }
     this.id = id;
+    this.ingredientId = ingredientId;
     this.ingredient = ingredient;
     this.quantity = quantity;
     this.unit = unit;
@@ -29,6 +41,10 @@ public class RecipeLine {
 
   public UUID getId() {
     return id;
+  }
+
+  public UUID getIngredientId() {
+    return ingredientId;
   }
 
   public String getIngredient() {

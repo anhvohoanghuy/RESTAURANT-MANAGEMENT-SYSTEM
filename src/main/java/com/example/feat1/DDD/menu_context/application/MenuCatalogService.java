@@ -183,6 +183,7 @@ public class MenuCatalogService {
                     line ->
                         new RecipeLine(
                             null,
+                            line.ingredientId(),
                             line.ingredient(),
                             line.quantity(),
                             line.unit(),
@@ -357,6 +358,7 @@ public class MenuCatalogService {
                 line ->
                     new RecipeResponse.Line(
                         line.getId(),
+                        line.getIngredientId(),
                         line.getIngredient(),
                         line.getQuantity(),
                         line.getUnit(),

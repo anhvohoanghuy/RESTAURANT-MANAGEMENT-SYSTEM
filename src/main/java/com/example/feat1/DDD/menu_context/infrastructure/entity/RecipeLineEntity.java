@@ -30,6 +30,9 @@ public class RecipeLineEntity {
   @Column(nullable = false)
   private String ingredient;
 
+  @Column(name = "ingredient_id")
+  private UUID ingredientId;
+
   @Column(nullable = false, precision = 12, scale = 3)
   private BigDecimal quantity;
 

@@ -42,6 +42,9 @@ public class OrderEntity {
   @Column(name = "table_id", nullable = false)
   private UUID tableId;
 
+  @Column(name = "table_session_id")
+  private UUID tableSessionId;
+
   @Column(name = "table_code", nullable = false)
   private String tableCode;
 

@@ -17,7 +17,8 @@ public record OrderCreatedEvent(
     Instant submittedAt) {
   public static final String TYPE = "OrderCreated";
 
-  public record OrderTable(UUID tableId, String code, String name, UUID areaId, String areaName) {}
+  public record OrderTable(
+      UUID tableId, UUID tableSessionId, String code, String name, UUID areaId, String areaName) {}
 
   public record OrderLine(
       UUID lineId,
