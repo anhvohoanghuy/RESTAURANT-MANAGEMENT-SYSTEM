@@ -2,24 +2,24 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 10
-status: complete
-last_updated: "2026-07-05T22:12:00.000+07:00"
+current_phase: 11
+status: context_gathered
+last_updated: "2026-07-05T22:25:00.000+07:00"
 last_activity: 2026-07-05
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 9
   total_plans: 9
   completed_plans: 9
-  percent: 100
-stopped_at: All tracked v1 phases complete
+  percent: 90
+stopped_at: Phase 11 Payment Checkout context gathered
 ---
 
 # State
 
-**Status:** Complete
-**Current Phase:** 10
-**Plans:** 9/9 complete overall
+**Status:** Context gathered
+**Current Phase:** 11
+**Plans:** 9/9 complete overall; Phase 11 is ready for planning
 **Last Activity:** 2026-07-05
 
 ## Notes
@@ -35,6 +35,7 @@ stopped_at: All tracked v1 phases complete
 - Phase 08 implemented Table Context catalog for dining areas/tables, public active listing, table validation snapshots, and minimal dev seed data.
 - Phase 09 implemented an authenticated Order Context cart MVP using Menu/Table validation ports and stored snapshots.
 - Phase 10 implemented submitted order persistence from cart, preserving table/line snapshots and publishing an order-created Kafka event.
+- Phase 11 context gathered for Payment Context checkout: manual partial payments, refunds, QR payment request placeholders, order payment summaries, and payment events.
 
 ## Accumulated Context
 
@@ -48,3 +49,4 @@ stopped_at: All tracked v1 phases complete
 - Phase 08 completed: Table Context, keeping Order/Cart deferred to Phase 09.
 - Phase 09 completed: Order Cart MVP in Order Context.
 - Phase 10 completed: Order Submission MVP in Order Context with Kafka order-created event publishing.
+- Phase 11 added: Payment Checkout in a separate Payment Context.

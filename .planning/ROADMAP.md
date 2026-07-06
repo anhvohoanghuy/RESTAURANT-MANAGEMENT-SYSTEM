@@ -15,6 +15,7 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 - [x] **Phase 08: table-context** - Add dining area/table catalog, active public table listing, table validation snapshot service, and minimal dev seed data. (completed 2026-07-05)
 - [x] **Phase 09: order-cart-mvp** - Add authenticated user cart in Order Context using Menu/Table validation ports and stored display snapshots. (completed 2026-07-05)
 - [x] **Phase 10: order-submission-mvp** - Submit authenticated carts into orders that persist table/line snapshots and publish an order-created Kafka event. (completed 2026-07-05)
+- [ ] **Phase 11: payment-checkout** - Add a Payment Context for manual partial payments, refunds, QR payment request placeholders, order payment summaries, and payment events.
 
 ## Phase Details
 
@@ -62,6 +63,7 @@ Plans:
 | 08. table-context | 1/1 | Complete    | 2026-07-05 |
 | 09. order-cart-mvp | 1/1 | Complete    | 2026-07-05 |
 | 10. order-submission-mvp | 1/1 | Complete    | 2026-07-05 |
+| 11. payment-checkout | 0/0 | Context | - |
 
 ### Phase 03: Google OAuth 2 login
 
@@ -186,3 +188,24 @@ Plans:
 
 Plans:
 - [x] 10-01: Implement order submission from cart with table snapshot
+
+### Phase 11: payment-checkout
+
+**Goal:** Add a Payment Context so staff/admin can record manual partial payments and refunds for submitted orders, users can create QR payment request placeholders for future providers, order reads can show payment summaries, and payment events are published for future consumers.
+**Requirements**: [PAY-001, PAY-002, PAY-003, PAY-004, PAY-005, PAY-006, PAY-007, PAY-008, PAY-009, PAY-010, PAY-011, PAY-012, PAY-013, PAY-014]
+**Depends on:** Phase 10
+**Success Criteria** (what must be TRUE):
+  1. Payment logic lives in a separate Payment Context and reads orders through ports instead of owning order data.
+  2. `STAFF` and `ADMIN` can record manual payments for submitted orders; ordinary users cannot confirm payments.
+  3. Manual payments support `CASH`, `BANK_TRANSFER`, and `QR_CODE`, use VND amounts, and require idempotency keys.
+  4. Orders support partial payment accounting with `UNPAID`, `PARTIALLY_PAID`, and `PAID` payment status.
+  5. Refunds are persisted in a separate `payment_refunds` model/table, attach to a payment record, require idempotency keys, and expose refund summary separately from payment status.
+  6. Confirmed payments cannot overpay the submitted order total, and refunds cannot exceed the payment amount.
+  7. Users can create QR payment request placeholders that return a future provider payment/redirect URL shape, without real provider integration or auto-confirmation.
+  8. Order read APIs enrich responses with payment summary via a port to Payment Context.
+  9. Admin/staff can view order-scoped payment/refund history and global payment history with cursor pagination and basic filters.
+  10. Successful payment/refund operations publish `PaymentRecorded`, `PaymentRefunded`, and `OrderPaymentCompleted` Kafka events after commit, without adding consumers.
+**Plans:** 0/0 plans complete
+
+Plans:
+- [ ] Plan pending

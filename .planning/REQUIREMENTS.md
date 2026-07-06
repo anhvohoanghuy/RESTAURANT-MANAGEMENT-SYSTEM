@@ -64,13 +64,30 @@
 - [x] **ORDER-014**: Authenticated users can read only their own submitted orders through order read APIs.
 - [x] **ORDER-015**: Successful order submission publishes an `OrderCreated` Kafka event with stable order, user, table, line, and total snapshot fields for future consumers.
 
+### Payment Context
+
+- [ ] **PAY-001**: The backend introduces a separate Payment Context that owns payment, refund, and payment-request persistence while reading submitted orders through ports.
+- [ ] **PAY-002**: The application adds a `STAFF` role and allows both `STAFF` and `ADMIN` to record manual payments and refunds.
+- [ ] **PAY-003**: The application supports manual payment records for submitted orders with methods `CASH`, `BANK_TRANSFER`, and `QR_CODE`.
+- [ ] **PAY-004**: Payment amounts are VND-only `BigDecimal` values and must be positive.
+- [ ] **PAY-005**: The application supports partial payments and computes payment status as `UNPAID`, `PARTIALLY_PAID`, or `PAID`.
+- [ ] **PAY-006**: Manual payment creation requires an idempotency key and retrying the same key for the same order returns the existing payment instead of creating a duplicate.
+- [ ] **PAY-007**: Confirmed payments cannot make the total paid amount exceed the submitted order total.
+- [ ] **PAY-008**: The application persists refunds in a separate `payment_refunds` table/model attached to a payment record.
+- [ ] **PAY-009**: Refund creation requires an idempotency key and refunds cannot exceed the original payment amount.
+- [ ] **PAY-010**: Refund summary is tracked separately from payment status, so a paid order remains payment-status `PAID` even when refund records exist.
+- [ ] **PAY-011**: Authenticated order owners can create QR payment request placeholders that expose a future provider payment/redirect URL shape without real provider integration or auto-confirmation.
+- [ ] **PAY-012**: Order read APIs enrich submitted order responses with payment summary through a port to Payment Context, without storing payment state in Order Context.
+- [ ] **PAY-013**: The application exposes order-scoped payment history and admin/staff global payment history with cursor pagination and basic filters.
+- [ ] **PAY-014**: Successful payment/refund operations publish `PaymentRecorded`, `PaymentRefunded`, and `OrderPaymentCompleted` Kafka events after commit, with no consumers in this phase.
+
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Payment | Phase 10 submits orders but does not process payment. |
+| Real payment gateway integration | Phase 11 creates QR/provider request placeholders only; provider calls, redirects, and webhooks are deferred. |
 | Kitchen/display workflow | Phase 10 persists submitted orders only; fulfillment state is deferred. |
-| Kafka consumers | Phase 10 publishes an order-created event only; downstream consumer services are deferred. |
+| Kafka consumers | Phases 10 and 11 publish events only; downstream consumer services are deferred. |
 | Table sessions/occupancy/reservations | Phase 08 is table catalog only; operational table state is deferred. |
 | Inventory costing | Recipe lines store ingredient, quantity, and unit only. |
 | SKU/variant generation | Topping choices are modeled as topping groups and options. |
@@ -130,10 +147,24 @@
 | ORDER-013 | Phase 10 | Complete |
 | ORDER-014 | Phase 10 | Complete |
 | ORDER-015 | Phase 10 | Complete |
+| PAY-001 | Phase 11 | Planned |
+| PAY-002 | Phase 11 | Planned |
+| PAY-003 | Phase 11 | Planned |
+| PAY-004 | Phase 11 | Planned |
+| PAY-005 | Phase 11 | Planned |
+| PAY-006 | Phase 11 | Planned |
+| PAY-007 | Phase 11 | Planned |
+| PAY-008 | Phase 11 | Planned |
+| PAY-009 | Phase 11 | Planned |
+| PAY-010 | Phase 11 | Planned |
+| PAY-011 | Phase 11 | Planned |
+| PAY-012 | Phase 11 | Planned |
+| PAY-013 | Phase 11 | Planned |
+| PAY-014 | Phase 11 | Planned |
 
 **Coverage:**
-- v1 requirements: 47 total
-- Mapped to phases: 47
+- v1 requirements: 61 total
+- Mapped to phases: 61
 - Unmapped: 0
 
 ---
