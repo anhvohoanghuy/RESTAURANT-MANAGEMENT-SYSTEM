@@ -16,6 +16,7 @@ public class RoleSeedInitializer implements CommandLineRunner {
   public void run(String... args) {
     seed(RoleEnum.USER);
     seed(RoleEnum.ADMIN);
+    seed(RoleEnum.STAFF);
   }
 
   private void seed(RoleEnum role) {

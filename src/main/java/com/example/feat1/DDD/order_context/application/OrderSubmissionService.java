@@ -1,6 +1,7 @@
 package com.example.feat1.DDD.order_context.application;
 
 import com.example.feat1.DDD.order_context.application.dto.OrderDtos.SubmittedOrderLineResponse;
+import com.example.feat1.DDD.order_context.application.dto.OrderDtos.SubmittedOrderPaymentSummary;
 import com.example.feat1.DDD.order_context.application.dto.OrderDtos.SubmittedOrderResponse;
 import com.example.feat1.DDD.order_context.application.dto.OrderDtos.SubmittedOrderTableSnapshot;
 import com.example.feat1.DDD.order_context.application.dto.OrderDtos.SubmittedOrderToppingSnapshotResponse;
@@ -8,6 +9,8 @@ import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import com.example.feat1.DDD.order_context.domain.model.OrderDomainException;
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
 import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
+import com.example.feat1.DDD.order_context.domain.port.PaymentSummaryPort;
+import com.example.feat1.DDD.order_context.domain.snapshot.OrderPaymentSummary;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartLineEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartLineToppingSnapshot;
@@ -35,6 +38,7 @@ public class OrderSubmissionService {
   private final OrderCartLineRepository cartLineRepository;
   private final OrderRepository orderRepository;
   private final OrderEventPublisher orderEventPublisher;
+  private final PaymentSummaryPort paymentSummaryPort;
 
   @Transactional
   public SubmittedOrderResponse submit(UUID userId) {
@@ -129,6 +133,8 @@ public class OrderSubmissionService {
   private SubmittedOrderResponse toResponse(OrderEntity order) {
     List<SubmittedOrderLineResponse> lines =
         order.getLines().stream().map(this::toLineResponse).toList();
+    OrderPaymentSummary paymentSummary =
+        paymentSummaryPort.summarize(order.getId(), order.getTotal());
     return new SubmittedOrderResponse(
         order.getId(),
         order.getUserId(),
@@ -141,7 +147,13 @@ public class OrderSubmissionService {
             order.getAreaId(),
             order.getAreaName()),
         lines,
-        order.getTotal());
+        order.getTotal(),
+        new SubmittedOrderPaymentSummary(
+            paymentSummary.paymentStatus(),
+            paymentSummary.paidAmount(),
+            paymentSummary.refundedAmount(),
+            paymentSummary.refundStatus(),
+            paymentSummary.remainingAmount()));
   }
 
   private SubmittedOrderLineResponse toLineResponse(OrderLineEntity line) {

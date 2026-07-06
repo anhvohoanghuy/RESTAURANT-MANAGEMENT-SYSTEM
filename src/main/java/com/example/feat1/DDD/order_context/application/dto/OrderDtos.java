@@ -16,7 +16,15 @@ public final class OrderDtos {
       Instant submittedAt,
       SubmittedOrderTableSnapshot table,
       List<SubmittedOrderLineResponse> lines,
-      BigDecimal total) {}
+      BigDecimal total,
+      SubmittedOrderPaymentSummary payment) {}
+
+  public record SubmittedOrderPaymentSummary(
+      String paymentStatus,
+      BigDecimal paidAmount,
+      BigDecimal refundedAmount,
+      String refundStatus,
+      BigDecimal remainingAmount) {}
 
   public record SubmittedOrderTableSnapshot(
       UUID tableId, String code, String name, UUID areaId, String areaName) {}

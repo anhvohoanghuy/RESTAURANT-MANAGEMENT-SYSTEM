@@ -11,7 +11,9 @@ public enum RoleEnum {
 
   USER(UUID.fromString("22222222-2222-2222-2222-222222222222"), "USER"),
 
-  MANAGER(UUID.fromString("33333333-3333-3333-3333-333333333333"), "MANAGER");
+  MANAGER(UUID.fromString("33333333-3333-3333-3333-333333333333"), "MANAGER"),
+
+  STAFF(UUID.fromString("44444444-4444-4444-4444-444444444444"), "STAFF");
   private final UUID id;
   private final String name;
 

@@ -12,6 +12,8 @@ import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import com.example.feat1.DDD.order_context.domain.model.CartStatus;
 import com.example.feat1.DDD.order_context.domain.model.OrderDomainException;
 import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
+import com.example.feat1.DDD.order_context.domain.port.PaymentSummaryPort;
+import com.example.feat1.DDD.order_context.domain.snapshot.OrderPaymentSummary;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartLineEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartLineToppingSnapshot;
@@ -32,6 +34,7 @@ class OrderSubmissionServiceTest {
   private OrderCartLineRepository cartLineRepository;
   private OrderRepository orderRepository;
   private OrderEventPublisher orderEventPublisher;
+  private PaymentSummaryPort paymentSummaryPort;
   private OrderSubmissionService service;
 
   private final UUID userId = UUID.randomUUID();
@@ -48,9 +51,14 @@ class OrderSubmissionServiceTest {
     cartLineRepository = mock(OrderCartLineRepository.class);
     orderRepository = mock(OrderRepository.class);
     orderEventPublisher = mock(OrderEventPublisher.class);
+    paymentSummaryPort = mock(PaymentSummaryPort.class);
     service =
         new OrderSubmissionService(
-            cartRepository, cartLineRepository, orderRepository, orderEventPublisher);
+            cartRepository,
+            cartLineRepository,
+            orderRepository,
+            orderEventPublisher,
+            paymentSummaryPort);
 
     when(cartRepository.save(any(OrderCartEntity.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -71,6 +79,8 @@ class OrderSubmissionServiceTest {
                       });
               return order;
             });
+    when(paymentSummaryPort.summarize(any(), any()))
+        .thenAnswer(invocation -> OrderPaymentSummary.unpaid(invocation.getArgument(1)));
   }
 
   @Test
@@ -88,6 +98,7 @@ class OrderSubmissionServiceTest {
     assertThat(response.lines().get(0).dishId()).isEqualTo(dishId);
     assertThat(response.lines().get(0).selectedToppings()).hasSize(1);
     assertThat(response.total()).isEqualByComparingTo("160000");
+    assertThat(response.payment().paymentStatus()).isEqualTo("UNPAID");
     assertThat(cart.getTableId()).isNull();
 
     verify(cartLineRepository).deleteByCart_Id(cartId);

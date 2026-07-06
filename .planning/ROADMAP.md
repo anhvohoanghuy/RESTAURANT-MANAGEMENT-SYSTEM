@@ -15,7 +15,7 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 - [x] **Phase 08: table-context** - Add dining area/table catalog, active public table listing, table validation snapshot service, and minimal dev seed data. (completed 2026-07-05)
 - [x] **Phase 09: order-cart-mvp** - Add authenticated user cart in Order Context using Menu/Table validation ports and stored display snapshots. (completed 2026-07-05)
 - [x] **Phase 10: order-submission-mvp** - Submit authenticated carts into orders that persist table/line snapshots and publish an order-created Kafka event. (completed 2026-07-05)
-- [ ] **Phase 11: payment-checkout** - Add a Payment Context for manual partial payments, refunds, QR payment request placeholders, order payment summaries, and payment events.
+- [x] **Phase 11: payment-checkout** - Add a Payment Context for manual partial payments, refunds, QR payment request placeholders, order payment summaries, and payment events. (completed 2026-07-06)
 
 ## Phase Details
 
@@ -63,7 +63,7 @@ Plans:
 | 08. table-context | 1/1 | Complete    | 2026-07-05 |
 | 09. order-cart-mvp | 1/1 | Complete    | 2026-07-05 |
 | 10. order-submission-mvp | 1/1 | Complete    | 2026-07-05 |
-| 11. payment-checkout | 0/0 | Context | - |
+| 11. payment-checkout | 1/1 | Complete | 2026-07-06 |
 
 ### Phase 03: Google OAuth 2 login
 
@@ -205,7 +205,7 @@ Plans:
   8. Order read APIs enrich responses with payment summary via a port to Payment Context.
   9. Admin/staff can view order-scoped payment/refund history and global payment history with cursor pagination and basic filters.
   10. Successful payment/refund operations publish `PaymentRecorded`, `PaymentRefunded`, and `OrderPaymentCompleted` Kafka events after commit, without adding consumers.
-**Plans:** 0/0 plans complete
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] Plan pending
+- [x] 11-01: Implement Payment Checkout Context
