@@ -11,6 +11,7 @@ import com.example.feat1.DDD.inventory_context.application.dto.InventoryDtos.Rec
 import com.example.feat1.DDD.inventory_context.domain.model.IngredientStatus;
 import com.example.feat1.DDD.inventory_context.domain.model.InventoryDomainException;
 import com.example.feat1.DDD.inventory_context.domain.port.MenuRecipeCostingPort;
+import com.example.feat1.DDD.inventory_context.domain.service.UnitConverter;
 import com.example.feat1.DDD.inventory_context.domain.snapshot.MenuCostingDishSnapshot;
 import com.example.feat1.DDD.inventory_context.domain.snapshot.RecipeCostingSnapshot;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientCostEntity;
@@ -33,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class InventoryCostingService {
   private static final int MONEY_SCALE = 2;
-  private static final int QUANTITY_SCALE = 6;
 
   private final IngredientRepository ingredientRepository;
   private final IngredientCostRepository costRepository;
@@ -176,7 +176,7 @@ public class InventoryCostingService {
     }
     BigDecimal converted;
     try {
-      converted = convert(line.quantity(), line.unit(), cost.get().getCostUnit());
+      converted = UnitConverter.convert(line.quantity(), line.unit(), cost.get().getCostUnit());
     } catch (InventoryDomainException exception) {
       return uncosted(line, "UNIT_CONVERSION_UNSUPPORTED");
     }
@@ -240,33 +240,6 @@ public class InventoryCostingService {
         cost.getCreatedAt());
   }
 
-  private BigDecimal convert(BigDecimal quantity, String fromUnit, String toUnit) {
-    String from = normalizeUnit(fromUnit);
-    String to = normalizeUnit(toUnit);
-    if (from.equals(to)) {
-      return quantity.setScale(QUANTITY_SCALE, RoundingMode.HALF_UP);
-    }
-    return quantity
-        .multiply(conversionFactor(from, to))
-        .setScale(QUANTITY_SCALE, RoundingMode.HALF_UP);
-  }
-
-  private BigDecimal conversionFactor(String from, String to) {
-    if (from.equals("kg") && to.equals("g")) {
-      return BigDecimal.valueOf(1000);
-    }
-    if (from.equals("g") && to.equals("kg")) {
-      return BigDecimal.valueOf(0.001);
-    }
-    if (from.equals("l") && to.equals("ml")) {
-      return BigDecimal.valueOf(1000);
-    }
-    if (from.equals("ml") && to.equals("l")) {
-      return BigDecimal.valueOf(0.001);
-    }
-    throw InventoryDomainException.unitConversionUnsupported();
-  }
-
   private BigDecimal marginPercent(BigDecimal margin, BigDecimal sellPrice) {
     if (sellPrice == null || sellPrice.compareTo(BigDecimal.ZERO) <= 0) {
       return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -281,11 +254,7 @@ public class InventoryCostingService {
   }
 
   private String normalizeUnit(String unit) {
-    String normalized = requiredText(unit, "Unit is required").toLowerCase();
-    if (normalized.equals("piece") || normalized.equals("pieces")) {
-      return "pcs";
-    }
-    return normalized;
+    return UnitConverter.normalizeUnit(unit);
   }
 
   private String requiredText(String value, String message) {
