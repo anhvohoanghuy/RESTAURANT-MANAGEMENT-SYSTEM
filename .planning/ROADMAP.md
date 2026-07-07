@@ -18,7 +18,7 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 - [x] **Phase 11: payment-checkout** - Add a Payment Context for manual partial payments, refunds, QR payment request placeholders, order payment summaries, and payment events. (completed 2026-07-06)
 - [x] **Phase 12: table-operations** - Add Table Sessions, occupancy tracking, and reservations for operational table management. Completed: 2026-07-06
 - [x] **Phase 13: inventory-costing** - Add ingredient master data, ingredient costs, recipe cost calculation, and menu margin reads. Completed: 2026-07-06
-- [ ] **Phase 14: inventory-management** - Add stock-on-hand, inventory movements, and operational stock management APIs.
+- [x] **Phase 14: inventory-management** - Add stock-on-hand, inventory movements, and operational stock management APIs. (completed 2026-07-07)
 
 ## Phase Details
 
@@ -69,7 +69,7 @@ Plans:
 | 11. payment-checkout | 1/1 | Complete | 2026-07-06 |
 | 12. table-operations | 1/1 | Complete | 2026-07-06 |
 | 13. inventory-costing | 1/1 | Complete | 2026-07-06 |
-| 14. inventory-management | 0/1 | Planned | - |
+| 14. inventory-management | 1/1 | Complete   | 2026-07-07 |
 
 ### Phase 03: Google OAuth 2 login
 
@@ -267,10 +267,10 @@ Plans:
   6. Ingredients can define low-stock thresholds and staff/admin can list low-stock ingredients.
   7. Public menu, order submission, payment, and recipe costing contracts remain backward compatible.
   8. Focused tests cover stock movement validation, balance updates, unit conversion, low-stock reads, and authorization.
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 14-01: Implement Inventory Stock Management Foundation
+- [x] 14-01: Implement Inventory Stock Management Foundation
 
 ## Backlog
 

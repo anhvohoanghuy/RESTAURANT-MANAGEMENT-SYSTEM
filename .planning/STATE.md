@@ -3,24 +3,23 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 14
-status: planned
-last_updated: "2026-07-06T21:05:00.000+07:00"
-last_activity: 2026-07-06
+status: completed
+last_updated: "2026-07-07T03:50:43.695Z"
+last_activity: 2026-07-07
 progress:
-  total_phases: 13
-  completed_phases: 12
+  total_phases: 14
+  completed_phases: 13
   total_plans: 13
-  completed_plans: 12
-  percent: 92
-stopped_at: Phase 14 Inventory Management planned and ready to discuss/execute
+  completed_plans: 13
+  percent: 93
 ---
 
 # State
 
-**Status:** Planned
+**Status:** Phase 14 complete
 **Current Phase:** 14
-**Plans:** 12/13 complete overall; Phase 14 ready to discuss/execute
-**Last Activity:** 2026-07-06
+**Plans:** 13/13 complete overall; Phase 14 verified and complete
+**Last Activity:** 2026-07-07
 
 ## Notes
 
@@ -40,7 +39,7 @@ stopped_at: Phase 14 Inventory Management planned and ready to discuss/execute
 - Phase 12 planned with one implementation plan covering sessions, occupancy, reservations, availability, optional Order/Cart session linkage, and events.
 - Phase 12 implemented and verified with focused integration coverage plus full Maven test suite on 2026-07-06.
 - Phase 13 implemented Inventory Costing: ingredient master data, ingredient cost records, recipe ingredient links, recipe cost calculation, and menu margin reads. Full Maven test suite passed on 2026-07-06.
-- Phase 14 planned for Inventory Management: stock-on-hand balances, inventory movements, manual receipts/adjustments/waste, and low-stock visibility.
+- Phase 14 implemented Inventory Management: stock-on-hand balances, immutable inventory movements (receipt/adjustment/waste/stock-count), atomic balance updates with non-negative guard, low-stock reads, and admin/staff stock APIs. Verified 8/8 success criteria; full Maven suite (119 tests) passed on 2026-07-07.
 
 ## Accumulated Context
 
