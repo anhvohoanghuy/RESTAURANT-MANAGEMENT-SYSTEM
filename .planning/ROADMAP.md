@@ -286,12 +286,17 @@ Plans:
 ### Phase 15: Kafka event consumers — order-confirmation saga
 
 **Goal:** Add Kafka consumer infrastructure and an order-confirmation saga: an order is created in `PENDING_CONFIRMATION`, Inventory consumes the `OrderCreated` event, verifies ingredient availability (`available = on_hand − reserved`) and **reserves** stock if sufficient (never negative) or rejects, then publishes a result event that Order Context consumes to move the order to `CONFIRMED` or `REJECTED`. Idempotent (processed-events ledger, eventId) with `DefaultErrorHandler` + Dead Letter Topic. Actual stock deduction (reserved → on_hand) is deferred to Phase 16; the `payments.events` consumer is out of scope.
-**Requirements**: TBD
+**Requirements**: Driven by locked decisions D-01..D-11 (no REQUIREMENTS.md IDs mapped)
 **Depends on:** Phase 14
-**Plans:** 0 plans
+**Plans:** 6 plans (3 waves)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 15 to break down)
+- [ ] 15-01-PLAN.md — Order lifecycle (PENDING_CONFIRMATION) + shared OrderStockResultEvent contract + saga config + serde test (D-01/D-08/D-10)
+- [ ] 15-02-PLAN.md — Inventory reservation persistence: reserved column + lock query, StockReservationEntity, processed-events ledger (D-02/D-03/D-09)
+- [ ] 15-03-PLAN.md — InventoryReservationService: requirement resolution, availability check, reserve/reject, after-commit publish (D-02/D-03/D-06/D-09/D-10/D-11)
+- [ ] 15-04-PLAN.md — Inventory Kafka wiring: producer + consumer config (ErrorHandlingDeserializer/DLT) + listener (D-04/D-05/D-10)
+- [ ] 15-05-PLAN.md — OrderConfirmationService: idempotent status-guarded transition + order-context ledger (D-03/D-10/D-11)
+- [ ] 15-06-PLAN.md — Order Kafka consumer config + listener, full saga suite green (D-04/D-05/D-10)
 
 ### Phase 16: Kitchen preparing workflow — settle reservations into actual deductions
 
