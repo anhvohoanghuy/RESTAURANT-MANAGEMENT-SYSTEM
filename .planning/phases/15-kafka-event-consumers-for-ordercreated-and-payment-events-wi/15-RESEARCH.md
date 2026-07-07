@@ -448,20 +448,15 @@ public void onStockResult(OrderStockResultEvent event) {
 
 ## Open Questions
 
-1. **Migrate all Kafka serdes to Jackson 3 now, or defer?**
-   - What we know: Jackson-2 classes are deprecated-for-removal but functional; producers already ship on Jackson 2.
-   - What's unclear: team appetite for touching shipped producers this phase.
-   - Recommendation: defer — use Jackson-2 serdes for symmetry (A1), add a follow-up phase to migrate producer + consumer together.
+> **Status: RESOLVED at planning time (Phase 15 plans 15-01..15-06).** All four questions below were decided during plan authoring; resolutions are baked into the plan tasks.
 
-2. **One shared `processed_events` table or one per bounded context?**
-   - What we know: DDD layout keeps contexts separate; both consumers need a ledger.
-   - Recommendation: one table per context (Inventory + Order) to respect context boundaries, keyed `(event_id, consumer_name)`. Claude's discretion per D-03.
+1. **Migrate all Kafka serdes to Jackson 3 now, or defer?** — RESOLVED: **defer.** Use Jackson-2 `JsonSerializer`/`JsonDeserializer` for producer/consumer symmetry (A1, D-05). A future phase migrates producer + consumer to Jackson 3 together.
 
-3. **Legacy `SUBMITTED` orders in prod DB — backfill or ignore?**
-   - Recommendation: ignore; only new orders enter the saga. Ensure read paths tolerate `SUBMITTED` (D-08).
+2. **One shared `processed_events` table or one per bounded context?** — RESOLVED: **one table per context, with physically distinct table names** — `inventory_processed_events` (Plan 15-02) and `order_processed_events` (Plan 15-05), each keyed `(event_id, consumer_name)`. This is mandatory, not optional: the app has ONE datasource / ONE JPA persistence unit, so two `@Entity` classes mapping the same physical table name would fail DDL/startup.
 
-4. **Broker topic provisioning strategy (auto-create vs `NewTopic` beans).**
-   - Recommendation: add `NewTopic` `@Bean`s (via `KafkaAdmin`) for the result topic + DLTs so environments without auto-create still work; gate behind the same bootstrap-servers property.
+3. **Legacy `SUBMITTED` orders in prod DB — backfill or ignore?** — RESOLVED: **ignore.** Only new orders enter the saga; `OrderConfirmationService` guards on `status == PENDING_CONFIRMATION`, so legacy `SUBMITTED` rows are untouched and read paths still tolerate them (D-08).
+
+4. **Broker topic provisioning strategy (auto-create vs `NewTopic` beans).** — RESOLVED: **`NewTopic` beans.** `InventoryKafkaTopicConfig` (Plan 15-04) declares `NewTopic` `@Bean`s for the result topic `inventory.order-stock-results` plus both DLTs `orders.created.DLT` and `inventory.order-stock-results.DLT`, auto-declared via Boot's auto-configured `KafkaAdmin` from `spring.kafka.bootstrap-servers`. The order-side consumer (Plan 15-06) reuses those same topic beans and declares no duplicates. This removes any reliance on broker `auto.create.topics.enable`. (Reconciles assumption A6.)
 
 ## Environment Availability
 
