@@ -282,3 +282,13 @@ Plans:
 
 Plans:
 - [ ] TBD (promote with /gsd:review-backlog when ready)
+
+### Phase 15: Kafka event consumers for OrderCreated and Payment events with idempotent inventory stock deduction
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 14
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 15 to break down)

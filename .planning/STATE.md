@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 14
 status: completed
-last_updated: "2026-07-07T03:50:43.695Z"
+last_updated: "2026-07-07T04:38:27.730Z"
 last_activity: 2026-07-07
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 13
   total_plans: 13
   completed_plans: 13
-  percent: 93
+  percent: 87
 ---
 
 # State
@@ -57,3 +57,4 @@ progress:
 - Phase 12 added: Table Operations for sessions, occupancy, and reservations.
 - Phase 13 added and completed: Inventory Costing as a separate Inventory Context, keeping stock movements deferred.
 - Phase 14 added: Inventory Management continues the Inventory Context with stock movements and balances while keeping automatic order deduction as a later integration decision.
+- Phase 15 added: Kafka event consumers for OrderCreated (orders.created) and Payment (payments.events) events — closes the produce-only gap (zero consumers today); first concrete use case is idempotent automatic inventory stock deduction on order/payment success (the deduction deferred from Phase 14).
