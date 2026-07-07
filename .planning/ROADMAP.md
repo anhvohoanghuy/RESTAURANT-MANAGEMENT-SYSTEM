@@ -271,3 +271,14 @@ Plans:
 
 Plans:
 - [ ] 14-01: Implement Inventory Stock Management Foundation
+
+## Backlog
+
+### Phase 999.1: Payment history filters (status, method, date range) (BACKLOG)
+
+**Goal:** Add `status`, `method`, `dateFrom`, and `dateTo` filters to `GET /admin/payments` (Payment Context `listPayments`). Deferred from Phase 11 per CONTEXT decision D-33 — currently only `orderId`/`orderUserId` filters plus cursor pagination exist. Surfaced during retroactive verification of Phase 11.
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd:review-backlog when ready)
