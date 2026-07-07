@@ -46,6 +46,13 @@ public class InventoryStockBalanceEntity {
   @Column(name = "quantity_on_hand", nullable = false, precision = 18, scale = 6)
   private BigDecimal quantityOnHand = BigDecimal.ZERO;
 
+  /**
+   * Running total of stock held by open reservations (base unit). Available stock is computed as
+   * {@code quantityOnHand - reservedQuantity} by the reservation service; it is never stored.
+   */
+  @Column(name = "reserved_quantity", nullable = false, precision = 18, scale = 6)
+  private BigDecimal reservedQuantity = BigDecimal.ZERO;
+
   @Column(name = "base_unit", nullable = false)
   private String baseUnit;
 
