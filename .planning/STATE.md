@@ -2,23 +2,23 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 15
-status: completed
+current_phase: 16
+status: in_progress
 last_updated: "2026-07-07T08:14:57.476Z"
 last_activity: 2026-07-07
 progress:
   total_phases: 16
-  completed_phases: 14
-  total_plans: 19
-  completed_plans: 19
-  percent: 88
+  completed_phases: 15
+  total_plans: 25
+  completed_plans: 25
+  percent: 94
 ---
 
 # State
 
-**Status:** Phase 15 complete
-**Current Phase:** 15
-**Plans:** 13/13 complete through Phase 14; Phase 15 planned (6 plans, 3 waves) and ready to execute
+**Status:** Phase 15 complete; Phase 16 context gathered (planning next)
+**Current Phase:** 16
+**Plans:** Phases 01–15 complete (25 plans); Phase 16 context captured, not yet planned
 **Last Activity:** 2026-07-07
 
 ## Notes
@@ -40,6 +40,8 @@ progress:
 - Phase 12 implemented and verified with focused integration coverage plus full Maven test suite on 2026-07-06.
 - Phase 13 implemented Inventory Costing: ingredient master data, ingredient cost records, recipe ingredient links, recipe cost calculation, and menu margin reads. Full Maven test suite passed on 2026-07-06.
 - Phase 14 implemented Inventory Management: stock-on-hand balances, immutable inventory movements (receipt/adjustment/waste/stock-count), atomic balance updates with non-negative guard, low-stock reads, and admin/staff stock APIs. Verified 8/8 success criteria; full Maven suite (119 tests) passed on 2026-07-07.
+- Phase 15 implemented the Kafka order-confirmation saga (6 plans, 3 waves): order created in PENDING_CONFIRMATION, Inventory reserves stock under pessimistic lock (available = on_hand − reserved, never negative) or rejects, publishes a result event Order Context consumes to reach CONFIRMED/REJECTED. Idempotent processed-events ledgers, DefaultErrorHandler + DLT, Jackson-3-native serde (no new deps). Verification PASS 19/19; full Maven suite (138 tests) passed 2026-07-07. Code review: 0 critical, 5 warning (WR-01..05), 5 info — logged for follow-up.
+- Phase 16 context gathered (2026-07-07): order-item-level preparing status + staff trigger; Inventory settles the held reservation into an actual deduction by re-resolving each line's recipe at prepare time; idempotent + clamp≥0 + DLT; new consumer applies the Phase 15 WR-01/WR-02 fixes.
 
 ## Accumulated Context
 

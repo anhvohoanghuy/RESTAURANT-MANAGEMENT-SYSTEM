@@ -19,6 +19,8 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 - [x] **Phase 12: table-operations** - Add Table Sessions, occupancy tracking, and reservations for operational table management. Completed: 2026-07-06
 - [x] **Phase 13: inventory-costing** - Add ingredient master data, ingredient costs, recipe cost calculation, and menu margin reads. Completed: 2026-07-06
 - [x] **Phase 14: inventory-management** - Add stock-on-hand, inventory movements, and operational stock management APIs. (completed 2026-07-07)
+- [x] **Phase 15: kafka-event-consumers — order-confirmation saga** - Order created in PENDING_CONFIRMATION; Inventory reserves stock (never negative) or rejects; result event moves the order to CONFIRMED/REJECTED. Idempotent, DLT, Jackson-3 serde. Completed: 2026-07-07
+- [ ] **Phase 16: kitchen-preparing-workflow** - Order-item preparing status settles held reservations into actual stock deductions (reserved → on_hand).
 
 ## Phase Details
 
@@ -70,6 +72,8 @@ Plans:
 | 12. table-operations | 1/1 | Complete | 2026-07-06 |
 | 13. inventory-costing | 1/1 | Complete | 2026-07-06 |
 | 14. inventory-management | 1/1 | Complete   | 2026-07-07 |
+| 15. kafka-event-consumers — order-confirmation saga | 6/6 | Complete | 2026-07-07 |
+| 16. kitchen-preparing-workflow | 0/? | Planning | — |
 
 ### Phase 03: Google OAuth 2 login
 
