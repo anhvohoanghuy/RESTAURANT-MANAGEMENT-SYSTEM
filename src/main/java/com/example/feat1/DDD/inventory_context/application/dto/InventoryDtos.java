@@ -1,6 +1,7 @@
 package com.example.feat1.DDD.inventory_context.application.dto;
 
 import com.example.feat1.DDD.inventory_context.domain.model.IngredientStatus;
+import com.example.feat1.DDD.inventory_context.domain.model.InventoryMovementType;
 import com.example.feat1.DDD.menu_context.domain.model.RecipeTargetType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -55,6 +56,42 @@ public final class InventoryDtos {
       BigDecimal lineCost,
       boolean costed,
       String reason) {}
+
+  public record StockMovementRequest(
+      UUID ingredientId,
+      InventoryMovementType type,
+      BigDecimal quantity,
+      String unit,
+      String note,
+      String referenceType,
+      UUID referenceId,
+      BigDecimal lowStockThreshold) {}
+
+  public record StockMovementResponse(
+      UUID movementId,
+      UUID ingredientId,
+      String ingredientName,
+      InventoryMovementType type,
+      BigDecimal quantity,
+      String unit,
+      BigDecimal baseQuantityDelta,
+      String baseUnit,
+      BigDecimal resultingBalance,
+      String note,
+      String referenceType,
+      UUID referenceId,
+      UUID actorId,
+      Instant createdAt) {}
+
+  public record StockBalanceResponse(
+      UUID ingredientId,
+      String ingredientName,
+      IngredientStatus ingredientStatus,
+      BigDecimal quantityOnHand,
+      String baseUnit,
+      BigDecimal lowStockThreshold,
+      boolean lowStock,
+      Instant lastMovementAt) {}
 
   public record MenuCostingResponse(List<MenuCostingItemResponse> items) {}
 
