@@ -128,6 +128,10 @@ None - no external service configuration required. New Kafka topic/group-id prop
 - Contract + config layer complete: status enum, shared result event, saga properties, and proven Jackson-3 serde are in place for the Wave-2/3 plans.
 - Downstream consumers (15-04/15-06) must use `JacksonJsonDeserializer` with `com.example.feat1.*` trusted packages to match the producer serde.
 
+## Self-Check: PASSED
+
+All created files present (OrderStockResultEvent.java, EventSerdeRoundTripTest.java, 15-01-SUMMARY.md) and all task commits (`33b9f64`, `7644392`, `469f39f`, `cb868cb`, `27c6b49`) verified in git history. Full suite 122/122 green.
+
 ---
 *Phase: 15-kafka-event-consumers-for-ordercreated-and-payment-events-wi*
 *Completed: 2026-07-07*
