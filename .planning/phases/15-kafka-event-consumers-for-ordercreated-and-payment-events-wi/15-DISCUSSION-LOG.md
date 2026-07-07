@@ -5,33 +5,43 @@
 **Date:** 2026-07-07
 **Phase:** 15-kafka-event-consumers
 **Mode:** discuss (interactive)
-**Areas discussed:** Deduction trigger, Insufficient-stock policy, Idempotency, Error handling
 
-## Questions & Answers
+## Round 1 — initial fire-and-forget design
 
-### Deduction trigger
-- **Options:** OrderCreated (order-submission time) / OrderPaymentCompleted (payment time) / Both-configurable
-- **Chosen:** **OrderCreated** (topic `orders.created`)
-- **Note:** Resolves the deduction-timing decision deferred from Phase 14; matches when a kitchen actually consumes ingredients.
+| Area | Chosen |
+|------|--------|
+| Deduction trigger | OrderCreated (`orders.created`) |
+| Insufficient stock | Allow negative + alert |
+| Idempotency | Processed-events ledger (unique `eventId`) |
+| Error handling | DefaultErrorHandler + Dead Letter Topic |
 
-### Insufficient / negative stock policy
-- **Options:** Allow negative + alert / Clamp to 0 + record shortage / Skip deduction + record exception
-- **Chosen:** **Allow negative + alert** — record movement, permit negative balance, raise staff alert; never block the already-placed order.
+## Round 2 — user redesign to an order-confirmation saga
 
-### Idempotency
-- **Options:** Processed-events ledger (unique eventId) / Movement reference uniqueness / Consumer offset only
-- **Chosen:** **Processed-events ledger** keyed by `eventId`.
+The user revised the approach: order should be created in **`PENDING_CONFIRMATION`**, publish a Kafka event, and only become successful **after Inventory verifies availability**. Additional constraint: **stock must never go negative**.
 
-### Error handling
-- **Options:** DefaultErrorHandler + Dead Letter Topic / Retry then log-and-skip / Manual ack + blocking retry
-- **Chosen:** **DefaultErrorHandler + Dead Letter Topic** (`<topic>.DLT`).
+Follow-up decisions:
 
-## Claude's Discretion (derived, not asked)
-- D-05 consumer infrastructure mirroring existing producer configs.
-- D-06 deduction mechanism (dish + topping recipes → ingredients → shared UnitConverter → per-ingredient movement; skip-and-alert on missing links).
-- D-07 payments.events consumer built on shared infra with minimal/deferred stock action.
+| Question | Chosen |
+|----------|--------|
+| Insufficient stock outcome | Order → **REJECTED** (terminal) |
+| When to deduct on success | Only when the item is sent to the kitchen and the kitchen marks it "đang làm" (preparing) |
+| Keep non-negative across confirm→kitchen | **Reserve on confirm, deduct for real when kitchen prepares** (`available = on_hand − reserved`) |
+| Where does the kitchen "đang làm" status live | **Split into a new Phase 16** |
+
+## Net effect on the design
+
+- **D-02 reversed:** no allow-negative; stock is a hard non-negative invariant.
+- **Phase 15 reshaped** from fire-and-forget inventory deduction into a two-context **order-confirmation saga**: `PENDING_CONFIRMATION` → Inventory availability check + **reservation** → result event → `CONFIRMED`/`REJECTED`.
+- **Deduction moved out** of Phase 15. Reservations are only *created/held* here.
+- **Phase 16 created:** kitchen "đang làm" status + event → convert reservation into actual `on_hand` deduction.
+- **Payments consumer dropped** from Phase 15 scope (payment is no longer the deduction trigger).
+
+## Retained from Round 1
+- Processed-events ledger (`eventId`) idempotency — now applied to both saga consumers.
+- DefaultErrorHandler + Dead Letter Topic error handling.
+- Consumer infra mirroring existing producer configs.
 
 ## Deferred Ideas
-- Stock return on refund / order cancel (no cancel flow exists).
-- Payment-triggered deduction option / dual-trigger config.
+- Reservation release on refund / order cancel (no cancel flow exists).
+- `payments.events` consumer.
 - Multi-location stock; supplier reorder automation; consumer scaling tuning.

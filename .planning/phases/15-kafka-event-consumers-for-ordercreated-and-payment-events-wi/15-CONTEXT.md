@@ -1,4 +1,4 @@
-# Phase 15: kafka-event-consumers - Context
+# Phase 15: kafka-event-consumers (order-confirmation saga) - Context
 
 **Gathered:** 2026-07-07
 **Status:** Ready for planning
@@ -6,49 +6,53 @@
 <domain>
 ## Phase Boundary
 
-Add Kafka **consumer** infrastructure (`@EnableKafka`, `ConsumerFactory`, `ConcurrentKafkaListenerContainerFactory`, consumer group-id, JSON deserializer) and `@KafkaListener` consumers for the already-produced `OrderCreated` (topic `orders.created`) and Payment (topic `payments.events`) events. The system today is **produce-only** (zero consumers).
+Add Kafka **consumer** infrastructure (`@EnableKafka`, `ConsumerFactory`, `ConcurrentKafkaListenerContainerFactory`, consumer group-id, JSON deserializer) and wire an **order-confirmation saga** across Order Context and Inventory Context using events. The system today is produce-only (zero consumers).
 
-The first concrete use case is **automatic inventory stock deduction** on order success — the "automatic order deduction" whose timing was explicitly deferred in Phase 14.
+**Saga:** an order is created in `PENDING_CONFIRMATION`, the existing `OrderCreated` event is consumed by Inventory, Inventory verifies ingredient availability and **reserves** stock if sufficient (or rejects), then publishes a result event that Order Context consumes to move the order to `CONFIRMED` or `REJECTED`.
 
-Fixed boundary: this phase wires consumers and the order-driven deduction use case. It does NOT add new produced events, order-cancel flows, multi-location stock, or purchasing/supplier features.
+**In scope:** consumer infra; order status lifecycle (`PENDING_CONFIRMATION`→`CONFIRMED`/`REJECTED`); inventory availability check + **reservation** (never negative); result event + order-side status transition; idempotency + DLT error handling.
+
+**Out of scope (→ Phase 16):** the kitchen "đang làm" (preparing) status and the conversion of a reservation into an **actual** stock deduction (reserved → on_hand). Also out: refund/cancel → release reservation, and the `payments.events` consumer.
 </domain>
 
 <decisions>
 ## Implementation Decisions
 
-### Deduction trigger
-- **D-01:** Automatic stock deduction triggers on **`OrderCreated`** (consume topic `orders.created`), i.e. at order-submission time — NOT at payment time. Rationale: in a dine-in restaurant the kitchen consumes ingredients when the order is placed, so inventory should reflect that moment. (This resolves the deduction-timing decision deferred from Phase 14.)
+### Order lifecycle & saga
+- **D-01:** An order is created in status **`PENDING_CONFIRMATION`** (new `OrderStatus` value; today the enum has only `SUBMITTED`). It is not final until the saga completes. The existing after-commit `OrderCreated` producer starts the saga.
+- **D-08:** `POST /orders` returns the order in `PENDING_CONFIRMATION` **synchronously**; the final `CONFIRMED`/`REJECTED` state is reached **asynchronously** and read via `GET /orders/{id}`. (Behavioral change from today's synchronous `SUBMITTED` response.)
 
-### Insufficient / negative stock policy (consumer path)
-- **D-02:** Auto-deduction **may drive stock negative**. It always records the movement and raises a low-stock / shortage alert for staff, and it **never fails or blocks** the already-committed order. This is a deliberate exception to Phase 14's manual-outbound rule (which blocks negative via `STOCK_INSUFFICIENT`): the order is already placed, so the truthful record is that stock was consumed even if the book balance goes negative.
+### Inventory availability gate & reservation (never negative)
+- **D-02 (revised — supersedes the earlier allow-negative decision):** Stock is **NEVER negative**. Inventory checks availability atomically as `available = on_hand − reserved ≥ required`. If sufficient → create a reservation (increment `reserved`). If insufficient → reject. There is no allow-negative path.
+- **D-09:** Reservation model — Inventory gains a **`reserved` quantity** concept (a column on the stock balance row and/or a per-order reservation record keyed by `orderId`). `available = on_hand − reserved`. The reservation is **settled in Phase 16** (kitchen "đang làm" converts `reserved` → actual `on_hand` deduction). This phase only creates/holds reservations.
+- **D-06 (revised):** Required quantity per order = for each `OrderCreatedEvent` line, resolve dish **and** selected topping options to recipe ingredient lines (Phase 01 recipes / Phase 13 links) × line `quantity`, unit-converted via the shared `UnitConverter` (Phase 14). A line whose dish/topping has no recipe/ingredient link contributes **zero** requirement (logged) and does not block confirmation.
+
+### Result event & order status transition
+- **D-10:** After commit, Inventory publishes a **result event** — `OrderStockConfirmed` (reservation held) or `OrderStockRejected` (with shortfall detail) — on a new topic (e.g. `inventory.order-stock-results`). Order Context **consumes** it and transitions `PENDING_CONFIRMATION` → `CONFIRMED` or `REJECTED`.
+- **D-11:** Insufficient stock → order transitions to **`REJECTED`** (terminal), carrying the reason (which ingredient(s) were short). Customer/staff see it via `GET /orders`. No cart-restore and no staff-review path in this phase.
 
 ### Idempotency
-- **D-03:** A dedicated **processed-events ledger** table, unique on `eventId`, guards against double-deduction under Kafka at-least-once delivery. The consumer records/checks `eventId` before applying deduction; a duplicate `eventId` is skipped. Both `OrderCreatedEvent` and `PaymentEvent` already carry `eventId`.
+- **D-03:** A **processed-events ledger** keyed by `eventId` guards **both** consumers (Inventory consuming `OrderCreated`; Order consuming the stock-result event) against double-processing under Kafka at-least-once. Reservation creation is additionally keyed by `orderId` (unique), so a replayed `OrderCreated` cannot double-reserve.
 
 ### Error handling
-- **D-04:** Spring Kafka **`DefaultErrorHandler` with fixed retries + a Dead Letter Topic** (`<topic>.DLT`). After retries are exhausted (or on non-retryable errors) the message is routed to the DLT so the partition is not blocked; DLT messages can be reprocessed later.
+- **D-04:** Spring Kafka **`DefaultErrorHandler` with fixed retries + a Dead Letter Topic** (`<topic>.DLT`) on each consumer.
 
-### Consumer infrastructure
-- **D-05:** Add consumer config mirroring the existing per-context **producer** config style (`OrderKafkaProducerConfig` etc.): `@EnableKafka`, `ConsumerFactory`, `ConcurrentKafkaListenerContainerFactory`, a consumer `group-id`, and a JSON deserializer with trusted-package/type-mapping config so `OrderCreatedEvent` / `PaymentEvent` deserialize correctly.
+### Consumer & producer wiring
+- **D-05:** Add consumer config mirroring the existing per-context producer config style: `@EnableKafka`, `ConsumerFactory`, `ConcurrentKafkaListenerContainerFactory`, a consumer `group-id`, and a JSON deserializer with trusted-package/type-mapping. Inventory gains a `OrderCreated` **consumer** + a result-event **producer**; Order Context gains a result-event **consumer**.
 
-### Deduction mechanism
-- **D-06:** For each `OrderCreatedEvent` line, resolve the dish **and** its selected topping options to their recipe ingredient lines (Phase 01 recipes / Phase 13 ingredient links), multiply by the line `quantity`, convert units via the **shared `UnitConverter`** (Phase 14), and record outbound consumption movements atomically per ingredient — using a dedicated order-consumption movement type/reason so it is distinguishable from manual `WASTE`/`ADJUSTMENT_OUT`. Lines whose dish/topping has no recipe or no ingredient link are **skipped with a logged alert**, not treated as a failure.
-
-### Payment consumer scope
-- **D-07:** Build the `payments.events` consumer on the same shared infrastructure, but its stock action is minimal/deferred in this phase (deduction already happens at order time per D-01). It exists so payment events are consumable; concrete payment-driven stock behaviour (e.g. refund → stock return) is out of scope here.
+### Payments consumer
+- **D-07 (revised):** The `payments.events` consumer is **out of scope** for this phase — deduction is driven by the kitchen (Phase 16), not payment. Deferred.
 
 ### Claude's Discretion
-- Exact order-consumption movement type/reason naming.
-- Alert representation (reuse the Phase 14 low-stock read vs. a dedicated shortage-alert record).
-- Consumer `group-id` value, retry count/backoff, and DLT topic naming.
-- Whether the processed-events ledger is one shared table or per-consumer.
+- Exact result-event topic name and schema, reservation storage shape (balance column vs. dedicated reservation table), consumer `group-id` values, retry counts/backoff, DLT topic naming, processed-events ledger granularity.
 </decisions>
 
 <specifics>
 ## Specific Ideas
 
-- Deduction should be **truthful over defensive**: prefer recording real consumption (even negative balance + alert) over silently skipping, so shrinkage/shortage is visible to staff.
-- Consumer config should look and feel like the existing producer configs already in each context's `infrastructure/config` package.
+- Inventory is the **authority** that gates order confirmation on stock availability — Order Context does not decide stock; it only reacts to Inventory's result event.
+- "Never negative" is a hard invariant: confirmation reserves, it does not deduct; only Phase 16 (kitchen) reduces `on_hand`, and only against an existing reservation.
+- Consumer config should mirror the existing producer configs in each context's `infrastructure/config`.
 </specifics>
 
 <canonical_refs>
@@ -57,52 +61,52 @@ Fixed boundary: this phase wires consumers and the order-driven deduction use ca
 **Downstream agents MUST read these before planning or implementing.**
 
 ### This phase
-- `.planning/ROADMAP.md` §"Phase 15" — phase goal and boundary.
+- `.planning/ROADMAP.md` §"Phase 15" — phase goal/boundary (order-confirmation saga).
 
-### Prior-phase context (locked upstream decisions)
-- `.planning/phases/14-inventory-management/14-01-SUMMARY.md` — stock balance + immutable movements, atomic balance update, non-negative guard, shared `UnitConverter`.
-- `.planning/phases/14-inventory-management/14-VERIFICATION.md` — verified stock behaviour the consumer must reuse.
-- `.planning/phases/13-inventory-costing/13-01-SUMMARY.md` — recipe→ingredient links and unit-conversion factors used to resolve a dish to its ingredients.
+### Prior-phase context (locked upstream)
+- `.planning/phases/14-inventory-management/14-01-SUMMARY.md` — stock balance + immutable movements, atomic balance update, non-negative guard, shared `UnitConverter` (reservation builds on this model).
+- `.planning/phases/13-inventory-costing/13-01-SUMMARY.md` — recipe→ingredient links + unit-conversion factors to resolve a dish/topping to ingredients.
 
 ### Event contracts (consumer inputs)
-- `src/main/java/com/example/feat1/DDD/order_context/application/event/OrderCreatedEvent.java` — payload: `eventId`, `orderId`, `lines[]` (`dishId`, `quantity`, `selectedToppings[].toppingOptionId`).
-- `src/main/java/com/example/feat1/DDD/payment_context/application/event/PaymentEvent.java` — payload: `eventId`, `eventType` (`PaymentRecorded`/`PaymentRefunded`/`ORDER_PAYMENT_COMPLETED`), `orderId`.
+- `src/main/java/com/example/feat1/DDD/order_context/application/event/OrderCreatedEvent.java` — `eventId`, `orderId`, `lines[]` (`dishId`, `quantity`, `selectedToppings[].toppingOptionId`).
+- `src/main/java/com/example/feat1/DDD/order_context/domain/model/OrderStatus.java` — enum to extend (`PENDING_CONFIRMATION`, `CONFIRMED`, `REJECTED`).
+- `src/main/java/com/example/feat1/DDD/order_context/application/OrderSubmissionService.java` — where orders are created + `OrderCreated` published after commit (status must become `PENDING_CONFIRMATION`).
 
 ### Producer/config pattern to mirror
-- `src/main/java/com/example/feat1/DDD/order_context/infrastructure/config/OrderKafkaProducerConfig.java` — style reference for the new consumer config.
-- `src/main/resources/application.properties` §24-30 — `spring.kafka.bootstrap-servers`, serializers, topic names (`orders.created`, `payments.events`).
+- `src/main/java/com/example/feat1/DDD/order_context/infrastructure/config/OrderKafkaProducerConfig.java` — style reference for new consumer/producer config.
+- `src/main/resources/application.properties` §24-30 — bootstrap-servers, serializers, existing topic names.
 </canonical_refs>
 
 <code_context>
 ## Existing Code Insights
 
 ### Reusable Assets
-- `InventoryStockService.recordMovement(...)` (Phase 14): atomic movement + balance update — the consumer should call this (or a sibling path) rather than writing balances directly.
-- `UnitConverter` (Phase 14): shared unit normalization/conversion for recipe-unit → stock-unit.
-- `InventoryMovementType` (Phase 14): extend/reuse for an order-consumption movement type.
-- Recipe→ingredient resolution via Phase 13 costing links + `RecipeLine` (menu_context) / `RecipeCostingSnapshot` (inventory_context).
-- Existing per-context Kafka **producer** configs as the structural template for the consumer config.
+- `InventoryStockService` + stock balance model (Phase 14): extend with a `reserved` quantity and an availability check; reuse atomic-transaction pattern.
+- `UnitConverter` (Phase 14): recipe-unit → stock-unit conversion for computing required quantity.
+- Recipe→ingredient resolution via Phase 13 links / `RecipeLine` (menu_context).
+- Existing per-context Kafka producer configs as the structural template for new consumer/producer config.
+- `OrderStatus` enum (currently `SUBMITTED` only) and `OrderEntity.status` (defaults `SUBMITTED`) — to extend and default to `PENDING_CONFIRMATION`.
 
 ### Established Patterns
-- Producers publish **after commit** via `TransactionSynchronization.afterCommit` (`OrderSubmissionService`, `PaymentService`) — consumers must therefore be idempotent and tolerant of at-least-once redelivery (D-03).
-- DDD context layout: `domain` / `application` / `infrastructure(adapter|config|presentation)`.
+- Producers publish **after commit** (`TransactionSynchronization.afterCommit`) → consumers must be idempotent (D-03).
+- DDD layout: `domain` / `application` / `infrastructure(adapter|config|presentation)`.
 
 ### Integration Points
-- New consumer lives in `inventory_context/infrastructure` (adapter/listener + config).
-- Reads `OrderCreatedEvent` from `orders.created`; calls into `InventoryStockService`.
-- New processed-events ledger persistence (entity + repository) in `inventory_context/infrastructure`.
+- Inventory: new `OrderCreated` listener + reservation logic + result-event producer (in `inventory_context/infrastructure`).
+- Order: new result-event listener that transitions order status (in `order_context/infrastructure`); `OrderSubmissionService` sets initial status `PENDING_CONFIRMATION`.
+- New processed-events ledger + reservation persistence (entities + repositories).
 </code_context>
 
 <deferred>
 ## Deferred Ideas
 
-- **Stock return on refund / order cancel** — no order-cancel flow exists yet; `PaymentRefunded` → stock return is a separate future phase.
-- **Payment-triggered deduction option** (deduct at payment instead of/along with order) — D-01 chose order-time; a configurable dual-trigger is future work.
-- **Multi-location stock** and supplier/purchasing reorder automation on low-stock alerts.
-- **Consumer scaling / concurrency tuning** (partitions, container concurrency) beyond a working default.
+- **Phase 16 — Kitchen "đang làm" (preparing) workflow:** order-item preparing status + event; Inventory consumes it to convert a reservation into an **actual** stock deduction (`reserved` → `on_hand`). This is the real deduction moment. (Split out per this discussion.)
+- **Reservation release on refund / order cancel** — no cancel flow exists; releasing a held reservation is future work.
+- **`payments.events` consumer** — not the deduction trigger under this design.
+- **Multi-location stock, supplier reorder automation, consumer scaling/concurrency tuning.**
 </deferred>
 
 ---
 
 *Phase: 15-kafka-event-consumers*
-*Context gathered: 2026-07-07*
+*Context gathered: 2026-07-07 (revised — order-confirmation saga)*

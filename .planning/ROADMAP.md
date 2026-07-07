@@ -283,12 +283,22 @@ Plans:
 Plans:
 - [ ] TBD (promote with /gsd:review-backlog when ready)
 
-### Phase 15: Kafka event consumers for OrderCreated and Payment events with idempotent inventory stock deduction
+### Phase 15: Kafka event consumers — order-confirmation saga
 
-**Goal:** [To be planned]
+**Goal:** Add Kafka consumer infrastructure and an order-confirmation saga: an order is created in `PENDING_CONFIRMATION`, Inventory consumes the `OrderCreated` event, verifies ingredient availability (`available = on_hand − reserved`) and **reserves** stock if sufficient (never negative) or rejects, then publishes a result event that Order Context consumes to move the order to `CONFIRMED` or `REJECTED`. Idempotent (processed-events ledger, eventId) with `DefaultErrorHandler` + Dead Letter Topic. Actual stock deduction (reserved → on_hand) is deferred to Phase 16; the `payments.events` consumer is out of scope.
 **Requirements**: TBD
 **Depends on:** Phase 14
 **Plans:** 0 plans
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 15 to break down)
+
+### Phase 16: Kitchen preparing workflow — settle reservations into actual deductions
+
+**Goal:** Add a kitchen "đang làm" (in-progress/preparing) status transition for a confirmed order and publish an event when it occurs; Inventory consumes that event to convert the order's held reservation into an **actual** stock deduction (`reserved` → `on_hand` decreases), keeping stock non-negative. This is the real consumption moment, split out from the Phase 15 confirmation saga.
+**Requirements**: TBD
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 16 to break down)
