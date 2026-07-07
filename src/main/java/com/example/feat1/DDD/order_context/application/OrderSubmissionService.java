@@ -55,7 +55,7 @@ public class OrderSubmissionService {
 
     OrderEntity order = new OrderEntity();
     order.setUserId(userId);
-    order.setStatus(OrderStatus.SUBMITTED);
+    order.setStatus(OrderStatus.PENDING_CONFIRMATION);
     order.setSubmittedAt(Instant.now());
     order.setTableId(cart.getTableId());
     order.setTableSessionId(cart.getTableSessionId());

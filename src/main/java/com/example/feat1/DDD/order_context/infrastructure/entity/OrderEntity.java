@@ -34,7 +34,10 @@ public class OrderEntity {
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
-  private OrderStatus status = OrderStatus.SUBMITTED;
+  private OrderStatus status = OrderStatus.PENDING_CONFIRMATION;
+
+  @Column(name = "rejection_reason")
+  private String rejectionReason;
 
   @Column(name = "submitted_at", nullable = false)
   private Instant submittedAt;

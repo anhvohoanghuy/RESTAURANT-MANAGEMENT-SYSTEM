@@ -96,6 +96,7 @@ class OrderSubmissionIntegrationTest {
             .andExpect(jsonPath("$.table.tableId").value(tableId.toString()))
             .andExpect(jsonPath("$.table.tableSessionId").value(tableSessionId.toString()))
             .andExpect(jsonPath("$.table.code").value("SUB-01"))
+            .andExpect(jsonPath("$.status").value("PENDING_CONFIRMATION"))
             .andExpect(jsonPath("$.lines.length()").value(1))
             .andExpect(jsonPath("$.lines[0].dishId").value(menu.dishId().toString()))
             .andExpect(
@@ -119,6 +120,7 @@ class OrderSubmissionIntegrationTest {
         .perform(get("/orders/{orderId}", orderId).header("Authorization", "Bearer " + accessToken))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.orderId").value(orderId))
+        .andExpect(jsonPath("$.status").value("PENDING_CONFIRMATION"))
         .andExpect(jsonPath("$.lines.length()").value(1));
 
     mockMvc
