@@ -305,9 +305,13 @@ Plans:
 ### Phase 16: Kitchen preparing workflow — settle reservations into actual deductions
 
 **Goal:** Add a kitchen "đang làm" (in-progress/preparing) status transition for a confirmed order and publish an event when it occurs; Inventory consumes that event to convert the order's held reservation into an **actual** stock deduction (`reserved` → `on_hand` decreases), keeping stock non-negative. This is the real consumption moment, split out from the Phase 15 confirmation saga.
-**Requirements**: TBD
+**Requirements**: Driven by CONTEXT.md decisions D-01..D-06 (no formal REQ IDs)
 **Depends on:** Phase 15
-**Plans:** 0 plans
+**Plans:** 5 plans (3 waves)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 16 to break down)
+- [ ] 16-01-PLAN.md — Order domain foundation: OrderStatus.PREPARING, OrderLineStatus, OrderLineEntity.status, OrderLinePreparingEvent contract, exception codes (D-01/D-06)
+- [ ] 16-02-PLAN.md — Inventory data foundation: CONSUMPTION movement type, ReservationStatus.SETTLED, lockByOrderId, ReservationSettlementEntity/repository (D-03/D-04/D-05)
+- [ ] 16-03-PLAN.md — Order-side trigger: staff endpoint under /admin/orders/**, preparing service (transition + after-commit publish), Jackson-3 producer (D-01/D-02/D-06)
+- [ ] 16-04-PLAN.md — Inventory settlement service: per-line recipe re-resolution, clamp≥0 deduction, CONSUMPTION audit movement (WR-02), REQUIRES_NEW ledger guard (WR-01), last-line SETTLED (D-03/D-04/D-05)
+- [ ] 16-05-PLAN.md — Inventory Kafka boundary: thin listener, consumer config + DLT + topics, config/serde tests, WR-01 integration test (D-03/D-04)
