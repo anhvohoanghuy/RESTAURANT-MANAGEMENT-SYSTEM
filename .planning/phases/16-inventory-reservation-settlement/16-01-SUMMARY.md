@@ -102,6 +102,10 @@ None - no external service configuration required. No dependencies added.
 - Data-layer types, columns, and queries are in place to unblock the settlement service (Plan 04) and Kafka boundary (Plan 05).
 - No blockers.
 
+## Self-Check: PASSED
+
+All 3 created files exist on disk; all task/doc commits (b80e0fa, 4189ca7, 71fb779) present in git log.
+
 ---
 *Phase: 16-inventory-reservation-settlement*
 *Completed: 2026-07-08*
