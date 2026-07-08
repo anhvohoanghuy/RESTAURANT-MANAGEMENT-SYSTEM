@@ -108,6 +108,10 @@ None - no external service configuration required.
 - Inventory can now re-resolve a single order line's recipe from a thin event via `OrderLineLookupPort`.
 - Ready for downstream reservation/settlement plans that consume this port.
 
+## Self-Check: PASSED
+
+All 5 created files verified present on disk; all task commits (`6bbb56d`, `a08d193`, `2194012`) and the metadata commit (`4919f2e`) verified in git history.
+
 ---
 *Phase: 16-inventory-reservation-settlement*
 *Completed: 2026-07-08*
