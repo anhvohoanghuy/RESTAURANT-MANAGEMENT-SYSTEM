@@ -13,6 +13,10 @@ public class InventoryDomainException extends AppException {
   public static final String MOVEMENT_QUANTITY_INVALID = "INVENTORY_MOVEMENT_QUANTITY_INVALID";
   public static final String STOCK_INSUFFICIENT = "INVENTORY_STOCK_INSUFFICIENT";
   public static final String STOCK_NOT_FOUND = "INVENTORY_STOCK_NOT_FOUND";
+  public static final String SETTLEMENT_RESERVATION_MISSING =
+      "INVENTORY_SETTLEMENT_RESERVATION_MISSING";
+  public static final String SETTLEMENT_ORDER_LINE_MISSING =
+      "INVENTORY_SETTLEMENT_ORDER_LINE_MISSING";
 
   private InventoryDomainException(String code, String message, HttpStatus status) {
     super(code, message, status);
@@ -62,5 +66,26 @@ public class InventoryDomainException extends AppException {
   public static InventoryDomainException stockNotFound() {
     return new InventoryDomainException(
         STOCK_NOT_FOUND, "Stock balance was not found", HttpStatus.NOT_FOUND);
+  }
+
+  /**
+   * Thrown when a settle-trigger arrives but no reservation exists for the order. Left OUT of the
+   * Kafka non-retryable set so a transient ordering race (settle before reserve commits) is retried
+   * and only lands on the DLT after backoff exhaustion (D-05).
+   */
+  public static InventoryDomainException settlementReservationMissing(java.util.UUID orderId) {
+    return new InventoryDomainException(
+        SETTLEMENT_RESERVATION_MISSING,
+        "No stock reservation found to settle for order " + orderId,
+        HttpStatus.CONFLICT);
+  }
+
+  /** Thrown when the order line to settle cannot be re-resolved (missing order-line data). */
+  public static InventoryDomainException settlementOrderLineMissing(
+      java.util.UUID orderId, java.util.UUID orderLineId) {
+    return new InventoryDomainException(
+        SETTLEMENT_ORDER_LINE_MISSING,
+        "Order line " + orderLineId + " for order " + orderId + " was not found to settle",
+        HttpStatus.CONFLICT);
   }
 }
