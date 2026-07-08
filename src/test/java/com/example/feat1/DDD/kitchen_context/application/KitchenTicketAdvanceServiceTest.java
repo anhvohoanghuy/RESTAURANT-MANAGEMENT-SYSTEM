@@ -43,6 +43,7 @@ class KitchenTicketAdvanceServiceTest {
     itemRepository = mock(KitchenTicketItemRepository.class);
     settleTriggerPublisher = mock(KitchenSettleTriggerPublisher.class);
     statusChangedPublisher = mock(KitchenTicketStatusChangedPublisher.class);
+    when(itemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     service =
         new KitchenTicketAdvanceService(
             itemRepository, settleTriggerPublisher, statusChangedPublisher);
