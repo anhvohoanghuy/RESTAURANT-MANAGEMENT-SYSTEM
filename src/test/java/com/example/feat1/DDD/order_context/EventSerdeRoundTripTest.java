@@ -2,6 +2,7 @@ package com.example.feat1.DDD.order_context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.feat1.DDD.inventory_context.application.event.SettleTriggerEvent;
 import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent;
 import java.math.BigDecimal;
@@ -115,5 +116,24 @@ class EventSerdeRoundTripTest {
     assertThat(restored.result()).isEqualTo(OrderStockResultEvent.Result.REJECTED);
     assertThat(restored.shortfalls()).hasSize(1);
     assertThat(restored.shortfalls().get(0).ingredientName()).isEqualTo("Beef");
+  }
+
+  @Test
+  void settleTriggerEventSurvivesRoundTrip() {
+    SettleTriggerEvent event =
+        new SettleTriggerEvent(
+            UUID.randomUUID(),
+            SettleTriggerEvent.TYPE,
+            Instant.parse("2026-07-08T09:30:00Z"),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            3);
+
+    SettleTriggerEvent restored = roundTrip(event, SettleTriggerEvent.class);
+
+    assertThat(restored).isEqualTo(event);
+    assertThat(restored.eventType()).isEqualTo(SettleTriggerEvent.TYPE);
+    assertThat(restored.occurredAt()).isEqualTo(Instant.parse("2026-07-08T09:30:00Z"));
+    assertThat(restored.totalLines()).isEqualTo(3);
   }
 }
