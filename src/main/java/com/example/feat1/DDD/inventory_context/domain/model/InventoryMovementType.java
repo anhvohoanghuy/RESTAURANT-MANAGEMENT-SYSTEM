@@ -17,14 +17,16 @@ public enum InventoryMovementType {
    * Physical stock count that sets stock-on-hand to the counted quantity. This is the explicit
    * correction path allowed to reconcile stock to a counted value.
    */
-  STOCK_COUNT;
+  STOCK_COUNT,
+  /** Outbound deduction settling a held reservation into an actual stock-on-hand decrease. */
+  CONSUMPTION;
 
   public boolean isInbound() {
     return this == RECEIPT || this == ADJUSTMENT_IN;
   }
 
   public boolean isOutbound() {
-    return this == ADJUSTMENT_OUT || this == WASTE;
+    return this == ADJUSTMENT_OUT || this == WASTE || this == CONSUMPTION;
   }
 
   public boolean isCount() {

@@ -40,9 +40,10 @@ import lombok.Setter;
             columnNames = {"order_id"}))
 public class StockReservationEntity {
 
-  /** Lifecycle of a reservation. Only HELD is produced this phase; Phase 16 settles it. */
+  /** Lifecycle of a reservation. Created as HELD; settled to SETTLED once the order deducts. */
   public enum ReservationStatus {
-    HELD
+    HELD,
+    SETTLED
   }
 
   /** Reserved base quantity for a single ingredient within a reservation. */
