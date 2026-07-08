@@ -1,10 +1,7 @@
 package com.example.feat1.DDD.inventory_context.application;
 
-import com.example.feat1.DDD.inventory_context.domain.model.InventoryDomainException;
 import com.example.feat1.DDD.inventory_context.domain.port.InventoryStockResultPublisher;
-import com.example.feat1.DDD.inventory_context.domain.port.MenuRecipeCostingPort;
-import com.example.feat1.DDD.inventory_context.domain.service.UnitConverter;
-import com.example.feat1.DDD.inventory_context.domain.snapshot.RecipeCostingSnapshot;
+import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementResolver;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryProcessedEventEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockBalanceEntity;
@@ -65,7 +62,7 @@ public class InventoryReservationService {
   private final StockReservationRepository reservationRepository;
   private final InventoryStockBalanceRepository balanceRepository;
   private final IngredientRepository ingredientRepository;
-  private final MenuRecipeCostingPort menuRecipeCostingPort;
+  private final RecipeRequirementResolver recipeRequirementResolver;
   private final InventoryStockResultPublisher stockResultPublisher;
 
   @Transactional
@@ -169,56 +166,16 @@ public class InventoryReservationService {
     }
     for (OrderCreatedEvent.OrderLine line : event.lines()) {
       int quantity = line.quantity();
-      accumulateRecipe(required, RecipeTargetType.DISH, line.dishId(), quantity);
+      recipeRequirementResolver.accumulate(
+          required, RecipeTargetType.DISH, line.dishId(), quantity);
       if (line.selectedToppings() != null) {
         for (OrderCreatedEvent.OrderTopping topping : line.selectedToppings()) {
-          accumulateRecipe(
+          recipeRequirementResolver.accumulate(
               required, RecipeTargetType.TOPPING_OPTION, topping.toppingOptionId(), quantity);
         }
       }
     }
     return required;
-  }
-
-  private void accumulateRecipe(
-      Map<UUID, BigDecimal> required,
-      RecipeTargetType targetType,
-      UUID targetId,
-      int orderLineQuantity) {
-    if (targetId == null) {
-      return;
-    }
-    Optional<RecipeCostingSnapshot> recipe = menuRecipeCostingPort.findRecipe(targetType, targetId);
-    if (recipe.isEmpty()) {
-      log.debug("No recipe for {} {} — contributes zero required stock", targetType, targetId);
-      return;
-    }
-    for (RecipeCostingSnapshot.Line line : recipe.get().lines()) {
-      UUID ingredientId = line.ingredientId();
-      if (ingredientId == null) {
-        continue;
-      }
-      Optional<IngredientEntity> ingredient = ingredientRepository.findById(ingredientId);
-      if (ingredient.isEmpty()) {
-        log.debug("Ingredient {} not found — contributes zero required stock", ingredientId);
-        continue;
-      }
-      String baseUnit = ingredient.get().getBaseUnit();
-      BigDecimal converted;
-      try {
-        converted = UnitConverter.convert(line.quantity(), line.unit(), baseUnit);
-      } catch (InventoryDomainException unconvertible) {
-        log.debug(
-            "Cannot convert {} {} to base unit {} for ingredient {} — contributes zero",
-            line.quantity(),
-            line.unit(),
-            baseUnit,
-            ingredientId);
-        continue;
-      }
-      BigDecimal contribution = converted.multiply(BigDecimal.valueOf(orderLineQuantity));
-      required.merge(ingredientId, contribution, BigDecimal::add);
-    }
   }
 
   private String ingredientName(UUID ingredientId, InventoryStockBalanceEntity balance) {
