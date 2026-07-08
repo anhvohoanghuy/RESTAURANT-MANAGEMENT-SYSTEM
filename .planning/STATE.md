@@ -3,22 +3,22 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 16
-status: executing
+status: completed
 last_updated: "2026-07-08T03:18:22.470Z"
 last_activity: 2026-07-08
 progress:
   total_phases: 17
-  completed_phases: 14
-  total_plans: 24
-  completed_plans: 19
-  percent: 79
+  completed_phases: 16
+  total_plans: 30
+  completed_plans: 30
+  percent: 94
 ---
 
 # State
 
-**Status:** Executing Phase 16
+**Status:** Phase 16 complete (inventory reservation settlement); Phase 17 (kitchen-context) next
 **Current Phase:** 16
-**Plans:** Phases 01–15 complete (25 plans); Phase 16 context captured, not yet planned
+**Plans:** Phases 01–16 complete (30 plans); Phase 17 not started
 **Last Activity:** 2026-07-08
 
 ## Notes
@@ -42,6 +42,7 @@ progress:
 - Phase 14 implemented Inventory Management: stock-on-hand balances, immutable inventory movements (receipt/adjustment/waste/stock-count), atomic balance updates with non-negative guard, low-stock reads, and admin/staff stock APIs. Verified 8/8 success criteria; full Maven suite (119 tests) passed on 2026-07-07.
 - Phase 15 implemented the Kafka order-confirmation saga (6 plans, 3 waves): order created in PENDING_CONFIRMATION, Inventory reserves stock under pessimistic lock (available = on_hand − reserved, never negative) or rejects, publishes a result event Order Context consumes to reach CONFIRMED/REJECTED. Idempotent processed-events ledgers, DefaultErrorHandler + DLT, Jackson-3-native serde (no new deps). Verification PASS 19/19; full Maven suite (138 tests) passed 2026-07-07. Code review: 0 critical, 5 warning (WR-01..05), 5 info — logged for follow-up.
 - Phase 16 context gathered (2026-07-07): order-item-level preparing status + staff trigger; Inventory settles the held reservation into an actual deduction by re-resolving each line's recipe at prepare time; idempotent + clamp≥0 + DLT; new consumer applies the Phase 15 WR-01/WR-02 fixes.
+- Phase 16 IMPLEMENTED (2026-07-08) after re-scope to pure inventory settlement (5 plans, 3 waves): a settle-trigger Kafka consumer that re-resolves each order line's recipe via a shared RecipeRequirementResolver (extracted from InventoryReservationService) + a new cross-context OrderLineLookupPort, locks the reservation row before ascending-ingredientId balance rows, decrements reserved+on_hand with a non-negative clamp (never throws), writes a CONSUMPTION movement directly (WR-02), and marks the reservation SETTLED when the last line settles. Dual idempotency (eventId ledger + per-(orderId,orderLineId) guard) with the WR-01 REQUIRES_NEW ledger writer; missing reservation → DLT. Jackson-3 native serde, no new deps. Verification PASS 9/9; full Maven suite 156 tests green. Producer of the settle-trigger is Phase 17 (kitchen-context).
 
 ## Accumulated Context
 
