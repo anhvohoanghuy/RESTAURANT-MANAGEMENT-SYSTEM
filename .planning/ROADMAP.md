@@ -83,7 +83,7 @@ Plans:
 | 14. inventory-management | 1/1 | Complete   | 2026-07-07 |
 | 15. kafka-event-consumers — order-confirmation saga | 6/6 | Complete | 2026-07-07 |
 | 16. inventory-reservation-settlement | 5/5 | Complete   | 2026-07-08 |
-| 17. kitchen-context | 0/7 | Not started | — |
+| 17. kitchen-context | 2/7 | In Progress|  |
 
 ### Phase 03: Google OAuth 2 login
 
@@ -374,14 +374,14 @@ Plans:
 **Goal:** Introduce a new `kitchen_context` bounded context that owns fulfillment. A `KitchenTicket` aggregate is created when the context consumes `OrderConfirmed`; it holds a per-item fulfillment lifecycle (**preparing → ready → served → completed**). A staff endpoint under `/admin/orders/**` (ADMIN/STAFF) advances an item's status; on the preparing transition the context publishes the settle-trigger event `(orderId, orderLineId, totalLines)` that Phase 16 consumes to deduct stock. Order status reflects fulfillment (e.g. `CONFIRMED → PREPARING`) **via event**, not by kitchen mutating the Order aggregate. This keeps order-taking (order_context), fulfillment (kitchen_context), and stock (inventory_context) as clean, separate boundaries.
 **Requirements**: Driven by CONTEXT decisions [D-01, D-02, D-03, D-04, D-05] (no formal REQ IDs — see 17-CONTEXT.md)
 **Depends on:** Phase 16
-**Plans:** 7 plans
+**Plans:** 2/7 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 17-01-PLAN.md — order_context: publish OrderConfirmed after commit + extend OrderStatus (D-01, D-04)
-- [ ] 17-02-PLAN.md — kitchen_context foundation: lifecycle enum, JPA aggregate, lockable/dual-key repositories (D-02)
+- [x] 17-01-PLAN.md — order_context: publish OrderConfirmed after commit + extend OrderStatus (D-01, D-04)
+- [x] 17-02-PLAN.md — kitchen_context foundation: lifecycle enum, JPA aggregate, lockable/dual-key repositories (D-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
