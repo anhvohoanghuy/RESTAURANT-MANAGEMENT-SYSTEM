@@ -7,7 +7,7 @@ status: in_progress
 last_updated: "2026-07-07T08:14:57.476Z"
 last_activity: 2026-07-07
 progress:
-  total_phases: 16
+  total_phases: 17
   completed_phases: 15
   total_plans: 25
   completed_plans: 25
@@ -61,3 +61,4 @@ progress:
 - Phase 14 added: Inventory Management continues the Inventory Context with stock movements and balances while keeping automatic order deduction as a later integration decision.
 - Phase 15 added and discussed (revised): reshaped from fire-and-forget deduction into an order-confirmation saga — order created in PENDING_CONFIRMATION, Inventory consumes OrderCreated, checks availability (on_hand − reserved) and reserves stock (never negative) or rejects, then publishes a result event Order Context consumes to reach CONFIRMED/REJECTED. Idempotent (processed-events ledger by eventId) with DefaultErrorHandler + DLT. Payments consumer dropped from scope.
 - Phase 16 added: kitchen "đang làm" (preparing) status + event; Inventory converts the held reservation into an actual stock deduction (reserved → on_hand) — the real consumption moment, split out from Phase 15.
+- Phase 16 RE-SCOPED (2026-07-07) for cleaner architecture: split into two boundaries. Phase 16 is now **inventory-reservation-settlement** — a pure Inventory settlement consumer (re-resolve line recipe → deduct reserved+on_hand, clamp≥0, CONSUMPTION audit movement, idempotent + DLT, WR-01/WR-02 fixes) reacting to a settle-trigger event. Phase 17 added: **kitchen-context** — a new bounded context (KitchenTicket aggregate, per-item preparing→ready→served→completed lifecycle, staff endpoint) that publishes the settle-trigger event and reflects fulfillment onto order status via event. The original Phase 16 plans/research/patterns were removed; Phase 16 CONTEXT rewritten and awaits re-plan.

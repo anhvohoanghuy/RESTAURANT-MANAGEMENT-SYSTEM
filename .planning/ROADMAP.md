@@ -20,7 +20,8 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 - [x] **Phase 13: inventory-costing** - Add ingredient master data, ingredient costs, recipe cost calculation, and menu margin reads. Completed: 2026-07-06
 - [x] **Phase 14: inventory-management** - Add stock-on-hand, inventory movements, and operational stock management APIs. (completed 2026-07-07)
 - [x] **Phase 15: kafka-event-consumers — order-confirmation saga** - Order created in PENDING_CONFIRMATION; Inventory reserves stock (never negative) or rejects; result event moves the order to CONFIRMED/REJECTED. Idempotent, DLT, Jackson-3 serde. Completed: 2026-07-07
-- [ ] **Phase 16: kitchen-preparing-workflow** - Order-item preparing status settles held reservations into actual stock deductions (reserved → on_hand).
+- [ ] **Phase 16: inventory-reservation-settlement** - Inventory settlement consumer converts a held reservation into an actual stock deduction (reserved → on_hand, non-negative) when it receives a settle-trigger event. Pure inventory concern; does not touch order status.
+- [ ] **Phase 17: kitchen-context** - New kitchen bounded context: a KitchenTicket aggregate derived from a confirmed order with a full per-item fulfillment lifecycle (preparing → ready → served → completed) that publishes the settle-trigger event Phase 16 consumes; order status reflects fulfillment via event.
 
 ## Phase Details
 
@@ -73,7 +74,8 @@ Plans:
 | 13. inventory-costing | 1/1 | Complete | 2026-07-06 |
 | 14. inventory-management | 1/1 | Complete   | 2026-07-07 |
 | 15. kafka-event-consumers — order-confirmation saga | 6/6 | Complete | 2026-07-07 |
-| 16. kitchen-preparing-workflow | 0/? | Planning | — |
+| 16. inventory-reservation-settlement | 0/? | Planning (re-scoped) | — |
+| 17. kitchen-context | 0/? | Not started | — |
 
 ### Phase 03: Google OAuth 2 login
 
@@ -302,16 +304,22 @@ Plans:
 - [x] 15-05-PLAN.md — OrderConfirmationService: idempotent status-guarded transition + order-context ledger (D-03/D-10/D-11)
 - [x] 15-06-PLAN.md — Order Kafka consumer config + listener, full saga suite green (D-04/D-05/D-10)
 
-### Phase 16: Kitchen preparing workflow — settle reservations into actual deductions
+### Phase 16: Inventory reservation settlement
 
-**Goal:** Add a kitchen "đang làm" (in-progress/preparing) status transition for a confirmed order and publish an event when it occurs; Inventory consumes that event to convert the order's held reservation into an **actual** stock deduction (`reserved` → `on_hand` decreases), keeping stock non-negative. This is the real consumption moment, split out from the Phase 15 confirmation saga.
-**Requirements**: Driven by CONTEXT.md decisions D-01..D-06 (no formal REQ IDs)
+**Goal:** Add an Inventory settlement consumer that converts a held reservation into an **actual** stock deduction (`reserved` → `on_hand` decreases, never negative) when it receives a settle-trigger event carrying `(orderId, orderLineId, totalLines)`. Inventory re-resolves each order line's recipe to per-ingredient base quantities (reuse the Phase 15 resolution path), deducts under a pessimistic lock with a non-negative clamp, records a CONSUMPTION audit movement, marks the reservation `SETTLED` when the last line settles, and is idempotent (eventId ledger + per-`(orderId, orderLineId)` guard, WR-01 `REQUIRES_NEW` isolation) with a DLT on a missing reservation. **Pure inventory concern — does NOT create the trigger and does NOT touch order status.** The producer of the settle-trigger event is the Phase 17 kitchen context; until then the consumer is exercised via unit/slice tests.
+**Requirements**: Driven by 16-CONTEXT.md decisions (D-03/D-04/D-05 from the original discussion) — no formal REQ IDs
 **Depends on:** Phase 15
-**Plans:** 5 plans (3 waves)
+**Plans:** TBD (re-plan after re-scope)
 
 Plans:
-- [ ] 16-01-PLAN.md — Order domain foundation: OrderStatus.PREPARING, OrderLineStatus, OrderLineEntity.status, OrderLinePreparingEvent contract, exception codes (D-01/D-06)
-- [ ] 16-02-PLAN.md — Inventory data foundation: CONSUMPTION movement type, ReservationStatus.SETTLED, lockByOrderId, ReservationSettlementEntity/repository (D-03/D-04/D-05)
-- [ ] 16-03-PLAN.md — Order-side trigger: staff endpoint under /admin/orders/**, preparing service (transition + after-commit publish), Jackson-3 producer (D-01/D-02/D-06)
-- [ ] 16-04-PLAN.md — Inventory settlement service: per-line recipe re-resolution, clamp≥0 deduction, CONSUMPTION audit movement (WR-02), REQUIRES_NEW ledger guard (WR-01), last-line SETTLED (D-03/D-04/D-05)
-- [ ] 16-05-PLAN.md — Inventory Kafka boundary: thin listener, consumer config + DLT + topics, config/serde tests, WR-01 integration test (D-03/D-04)
+- [ ] TBD (run /gsd:plan-phase 16 to break down the re-scoped inventory-settlement phase)
+
+### Phase 17: Kitchen context
+
+**Goal:** Introduce a new `kitchen_context` bounded context that owns fulfillment. A `KitchenTicket` aggregate is created when the context consumes `OrderConfirmed`; it holds a per-item fulfillment lifecycle (**preparing → ready → served → completed**). A staff endpoint under `/admin/orders/**` (ADMIN/STAFF) advances an item's status; on the preparing transition the context publishes the settle-trigger event `(orderId, orderLineId, totalLines)` that Phase 16 consumes to deduct stock. Order status reflects fulfillment (e.g. `CONFIRMED → PREPARING`) **via event**, not by kitchen mutating the Order aggregate. This keeps order-taking (order_context), fulfillment (kitchen_context), and stock (inventory_context) as clean, separate boundaries.
+**Requirements**: TBD (run /gsd:discuss-phase 17)
+**Depends on:** Phase 16
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 17 to break down)
