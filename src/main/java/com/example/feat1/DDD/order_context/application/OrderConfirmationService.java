@@ -1,21 +1,29 @@
 package com.example.feat1.DDD.order_context.application;
 
+import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent;
+import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent.OrderConfirmedLine;
+import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent.OrderConfirmedTopping;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Result;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Shortfall;
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
+import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderEntity;
+import com.example.feat1.DDD.order_context.infrastructure.entity.OrderLineEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderProcessedEventEntity;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProcessedEventRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Terminal half of the order-confirmation saga: reacts to Inventory's stock verdict and
@@ -34,6 +42,7 @@ public class OrderConfirmationService {
 
   private final OrderProcessedEventRepository processedEventRepository;
   private final OrderRepository orderRepository;
+  private final OrderEventPublisher orderEventPublisher;
 
   @Transactional
   public void onStockResult(OrderStockResultEvent event) {
@@ -65,10 +74,47 @@ public class OrderConfirmationService {
     // (3) Apply the verdict.
     if (event.result() == Result.CONFIRMED) {
       order.setStatus(OrderStatus.CONFIRMED);
+      publishAfterCommit(toOrderConfirmedEvent(order));
     } else {
       order.setStatus(OrderStatus.REJECTED);
       order.setRejectionReason(describe(event.shortfalls()));
     }
+  }
+
+  private OrderConfirmedEvent toOrderConfirmedEvent(OrderEntity order) {
+    List<OrderConfirmedLine> lines =
+        order.getLines().stream().map(this::toOrderConfirmedLine).toList();
+    return new OrderConfirmedEvent(
+        UUID.randomUUID(), OrderConfirmedEvent.TYPE, Instant.now(), order.getId(), lines);
+  }
+
+  private OrderConfirmedLine toOrderConfirmedLine(OrderLineEntity line) {
+    List<OrderConfirmedTopping> toppings =
+        line.getSelectedToppings().stream()
+            .map(
+                topping ->
+                    new OrderConfirmedTopping(
+                        topping.getToppingGroupId(),
+                        topping.getToppingGroupName(),
+                        topping.getToppingOptionId(),
+                        topping.getToppingOptionName()))
+            .toList();
+    return new OrderConfirmedLine(
+        line.getId(), line.getDishId(), line.getDishName(), line.getQuantity(), toppings);
+  }
+
+  private void publishAfterCommit(OrderConfirmedEvent event) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      orderEventPublisher.publishOrderConfirmed(event);
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            orderEventPublisher.publishOrderConfirmed(event);
+          }
+        });
   }
 
   private String describe(List<Shortfall> shortfalls) {
