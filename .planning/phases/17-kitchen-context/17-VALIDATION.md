@@ -1,9 +1,9 @@
 ---
 phase: 17
 slug: kitchen-context
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-07-08
 ---
 
@@ -52,12 +52,16 @@ created: 2026-07-08
 
 ## Wave 0 Requirements
 
-- [ ] `KitchenTicketCreationServiceTest.java` — covers D-01 (consumer side)
-- [ ] `KitchenTicketAdvanceServiceTest.java` — covers D-02 / D-03
-- [ ] Extend `OrderConfirmationServiceTest.java` (add, do not replace) — covers D-01 publish side
-- [ ] `TicketStatusChangedListenerTest.java` / order-side derivation service test — covers D-04
-- [ ] `KitchenIntegrationTest.java` (`@SpringBootTest` + MockMvc, mirrors `InventoryStockIntegrationTest`) — covers D-05
-- [ ] Broker-free wiring tests mirroring `SettleTriggerKafkaConsumerConfigTest.java`: `KitchenKafkaProducerConfigTest`, `OrderConfirmedKafkaConsumerConfigTest`, `TicketStatusChangedKafkaConsumerConfigTest`
+**No separate Wave 0.** Each PLAN.md embeds its test file(s) in the same task that implements the
+behavior (verified by plan-checker), so there are no dangling MISSING references. The test classes
+below are created inline by their owning plans rather than a distinct Wave 0 pass:
+
+- [x] `KitchenTicketCreationServiceTest.java` — D-01 (consumer side) → plan 17-03
+- [x] `KitchenTicketAdvanceServiceTest.java` — D-02 / D-03 → plan 17-05
+- [x] Extended `OrderConfirmationServiceTest.java` (add, do not replace) — D-01 publish side → plan 17-01
+- [x] Order-side status-derivation / `TicketStatusChangedListener` test — D-04 → plan 17-07
+- [x] `KitchenIntegrationTest.java` (`@SpringBootTest` + MockMvc, mirrors `InventoryStockIntegrationTest`) — D-05 → plan 17-06
+- [x] Broker-free wiring tests mirroring `SettleTriggerKafkaConsumerConfigTest.java` → plans 17-03 / 17-04
 - Framework install: **none** — JUnit 5, Mockito, AssertJ, H2, MockMvc, Spring Security test support already present and used by 15+ existing test classes.
 
 ---
@@ -74,11 +78,11 @@ created: 2026-07-08
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency acceptable (targeted class in seconds)
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify (embedded per-task; plan-checker confirmed no MISSING refs)
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (N/A — tests embedded per-task, no separate Wave 0)
+- [x] No watch-mode flags
+- [x] Feedback latency acceptable (targeted class in seconds)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-07-08 (plan-checker: 0 blockers; Nyquist Dimension 8 passes on actual plan content)

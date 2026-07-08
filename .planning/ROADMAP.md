@@ -378,10 +378,21 @@ Plans:
 
 Plans:
 
+**Wave 1**
+
 - [ ] 17-01-PLAN.md — order_context: publish OrderConfirmed after commit + extend OrderStatus (D-01, D-04)
 - [ ] 17-02-PLAN.md — kitchen_context foundation: lifecycle enum, JPA aggregate, lockable/dual-key repositories (D-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 17-03-PLAN.md — kitchen OrderConfirmed consumer: topic config + idempotent ticket creation (D-01)
 - [ ] 17-04-PLAN.md — kitchen outbound producers: SettleTrigger (imported) + ticket-status-changed event (D-03, D-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 17-05-PLAN.md — kitchen advance service: locked forward-only transition + exactly-once settle-trigger (D-02, D-03)
-- [ ] 17-06-PLAN.md — staff REST endpoints: PATCH advance + GET kitchen board under /admin/orders/** (D-05)
 - [ ] 17-07-PLAN.md — order_context projection: derive order status from kitchen snapshot, forward-only + idempotent (D-04)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 17-06-PLAN.md — staff REST endpoints: PATCH advance + GET kitchen board under /admin/orders/** (D-05)
