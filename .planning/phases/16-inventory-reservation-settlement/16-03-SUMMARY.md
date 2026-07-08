@@ -86,6 +86,11 @@ None - no external service configuration required.
 ## Next Phase Readiness
 - Plan 04 (single-line settlement) can now resolve a line's recipe via `recipeRequirementResolver.accumulate(...)` / `resolveForTarget(...)` — the same code the reservation path uses, satisfying D-02's "reuse the exact Phase 15 recipe-resolution path".
 
+## Self-Check: PASSED
+
+- Files verified present: RecipeRequirementResolver.java, InventoryReservationService.java, 16-03-SUMMARY.md
+- Commits verified present: 3ebb0dc, b599de4, 1f5d2df
+
 ---
 *Phase: 16-inventory-reservation-settlement*
 *Completed: 2026-07-08*
