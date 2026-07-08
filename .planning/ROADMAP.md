@@ -21,7 +21,7 @@ The backend first delivered a Restaurant Menu Context for sellable catalog manag
 - [x] **Phase 14: inventory-management** - Add stock-on-hand, inventory movements, and operational stock management APIs. (completed 2026-07-07)
 - [x] **Phase 15: kafka-event-consumers — order-confirmation saga** - Order created in PENDING_CONFIRMATION; Inventory reserves stock (never negative) or rejects; result event moves the order to CONFIRMED/REJECTED. Idempotent, DLT, Jackson-3 serde. Completed: 2026-07-07
 - [x] **Phase 16: inventory-reservation-settlement** - Inventory settlement consumer converts a held reservation into an actual stock deduction (reserved → on_hand, non-negative) when it receives a settle-trigger event. Pure inventory concern; does not touch order status. (completed 2026-07-08)
-- [ ] **Phase 17: kitchen-context** - New kitchen bounded context: a KitchenTicket aggregate derived from a confirmed order with a full per-item fulfillment lifecycle (preparing → ready → served → completed) that publishes the settle-trigger event Phase 16 consumes; order status reflects fulfillment via event.
+- [x] **Phase 17: kitchen-context** - New kitchen bounded context: a KitchenTicket aggregate derived from a confirmed order with a full per-item fulfillment lifecycle (preparing → ready → served → completed) that publishes the settle-trigger event Phase 16 consumes; order status reflects fulfillment via event. (completed 2026-07-08)
 
 ## Phase Details
 
@@ -83,7 +83,7 @@ Plans:
 | 14. inventory-management | 1/1 | Complete   | 2026-07-07 |
 | 15. kafka-event-consumers — order-confirmation saga | 6/6 | Complete | 2026-07-07 |
 | 16. inventory-reservation-settlement | 5/5 | Complete   | 2026-07-08 |
-| 17. kitchen-context | 6/7 | In Progress|  |
+| 17. kitchen-context | 7/7 | Complete   | 2026-07-08 |
 
 ### Phase 03: Google OAuth 2 login
 
@@ -374,7 +374,7 @@ Plans:
 **Goal:** Introduce a new `kitchen_context` bounded context that owns fulfillment. A `KitchenTicket` aggregate is created when the context consumes `OrderConfirmed`; it holds a per-item fulfillment lifecycle (**preparing → ready → served → completed**). A staff endpoint under `/admin/orders/**` (ADMIN/STAFF) advances an item's status; on the preparing transition the context publishes the settle-trigger event `(orderId, orderLineId, totalLines)` that Phase 16 consumes to deduct stock. Order status reflects fulfillment (e.g. `CONFIRMED → PREPARING`) **via event**, not by kitchen mutating the Order aggregate. This keeps order-taking (order_context), fulfillment (kitchen_context), and stock (inventory_context) as clean, separate boundaries.
 **Requirements**: Driven by CONTEXT decisions [D-01, D-02, D-03, D-04, D-05] (no formal REQ IDs — see 17-CONTEXT.md)
 **Depends on:** Phase 16
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 
@@ -395,4 +395,4 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 17-06-PLAN.md — staff REST endpoints: PATCH advance + GET kitchen board under /admin/orders/** (D-05)
+- [x] 17-06-PLAN.md — staff REST endpoints: PATCH advance + GET kitchen board under /admin/orders/** (D-05)
