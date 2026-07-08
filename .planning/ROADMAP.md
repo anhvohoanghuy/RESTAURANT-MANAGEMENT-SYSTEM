@@ -82,7 +82,7 @@ Plans:
 | 13. inventory-costing | 1/1 | Complete | 2026-07-06 |
 | 14. inventory-management | 1/1 | Complete   | 2026-07-07 |
 | 15. kafka-event-consumers — order-confirmation saga | 6/6 | Complete | 2026-07-07 |
-| 16. inventory-reservation-settlement | 3/5 | In Progress|  |
+| 16. inventory-reservation-settlement | 4/5 | In Progress|  |
 | 17. kitchen-context | 0/? | Not started | — |
 
 ### Phase 03: Google OAuth 2 login
@@ -352,7 +352,7 @@ Plans:
 **Goal:** Add an Inventory settlement consumer that converts a held reservation into an **actual** stock deduction (`reserved` → `on_hand` decreases, never negative) when it receives a settle-trigger event carrying `(orderId, orderLineId, totalLines)`. Inventory re-resolves each order line's recipe to per-ingredient base quantities (reuse the Phase 15 resolution path), deducts under a pessimistic lock with a non-negative clamp, records a CONSUMPTION audit movement, marks the reservation `SETTLED` when the last line settles, and is idempotent (eventId ledger + per-`(orderId, orderLineId)` guard, WR-01 `REQUIRES_NEW` isolation) with a DLT on a missing reservation. **Pure inventory concern — does NOT create the trigger and does NOT touch order status.** The producer of the settle-trigger event is the Phase 17 kitchen context; until then the consumer is exercised via unit/slice tests.
 **Requirements**: Driven by 16-CONTEXT.md decisions (D-03/D-04/D-05 from the original discussion) — no formal REQ IDs
 **Depends on:** Phase 15
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1**
@@ -363,7 +363,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 16-04-PLAN.md — Settlement service + REQUIRES_NEW ledger writer: re-resolve, subtract+clamp, CONSUMPTION movement, SETTLED, idempotency (wave 2)
+- [x] 16-04-PLAN.md — Settlement service + REQUIRES_NEW ledger writer: re-resolve, subtract+clamp, CONSUMPTION movement, SETTLED, idempotency (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
