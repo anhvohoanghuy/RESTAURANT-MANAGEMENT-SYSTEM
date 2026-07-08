@@ -24,13 +24,17 @@ public class InventoryKafkaTopicConfig {
 
   private final String orderStockResultsTopic;
   private final String orderCreatedTopic;
+  private final String settleTriggerTopic;
 
   public InventoryKafkaTopicConfig(
       @Value("${inventory.events.order-stock-results-topic:inventory.order-stock-results}")
           String orderStockResultsTopic,
-      @Value("${order.events.order-created-topic:orders.created}") String orderCreatedTopic) {
+      @Value("${order.events.order-created-topic:orders.created}") String orderCreatedTopic,
+      @Value("${kitchen.events.settle-trigger-topic:kitchen.settlement-trigger}")
+          String settleTriggerTopic) {
     this.orderStockResultsTopic = orderStockResultsTopic;
     this.orderCreatedTopic = orderCreatedTopic;
+    this.settleTriggerTopic = settleTriggerTopic;
   }
 
   @Bean
@@ -46,5 +50,15 @@ public class InventoryKafkaTopicConfig {
   @Bean
   public NewTopic orderStockResultsDltTopic() {
     return TopicBuilder.name(orderStockResultsTopic + DLT_SUFFIX).partitions(1).replicas(1).build();
+  }
+
+  @Bean
+  public NewTopic settleTriggerTopic() {
+    return TopicBuilder.name(settleTriggerTopic).partitions(1).replicas(1).build();
+  }
+
+  @Bean
+  public NewTopic settleTriggerDltTopic() {
+    return TopicBuilder.name(settleTriggerTopic + DLT_SUFFIX).partitions(1).replicas(1).build();
   }
 }
