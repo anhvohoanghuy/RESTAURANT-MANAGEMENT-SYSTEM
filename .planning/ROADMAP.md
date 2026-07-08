@@ -83,7 +83,7 @@ Plans:
 | 14. inventory-management | 1/1 | Complete   | 2026-07-07 |
 | 15. kafka-event-consumers — order-confirmation saga | 6/6 | Complete | 2026-07-07 |
 | 16. inventory-reservation-settlement | 5/5 | Complete   | 2026-07-08 |
-| 17. kitchen-context | 7/7 | Complete   | 2026-07-08 |
+| 17. kitchen-context | 7/7 | Complete    | 2026-07-08 |
 
 ### Phase 03: Google OAuth 2 login
 
