@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.example.feat1.DDD.inventory_context.domain.model.IngredientStatus;
 import com.example.feat1.DDD.inventory_context.domain.port.InventoryStockResultPublisher;
 import com.example.feat1.DDD.inventory_context.domain.port.MenuRecipeCostingPort;
+import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementResolver;
 import com.example.feat1.DDD.inventory_context.domain.snapshot.RecipeCostingSnapshot;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockBalanceEntity;
@@ -53,13 +54,17 @@ class InventoryReservationServiceTest {
     ingredientRepository = mock(IngredientRepository.class);
     menuRecipeCostingPort = mock(MenuRecipeCostingPort.class);
     stockResultPublisher = mock(InventoryStockResultPublisher.class);
+    // Real resolver wired with the existing mocks so recipe-resolution behavior is exercised
+    // end-to-end through the extracted shared collaborator (D-02, behavior-preserving refactor).
+    RecipeRequirementResolver recipeRequirementResolver =
+        new RecipeRequirementResolver(menuRecipeCostingPort, ingredientRepository);
     service =
         new InventoryReservationService(
             processedEventRepository,
             reservationRepository,
             balanceRepository,
             ingredientRepository,
-            menuRecipeCostingPort,
+            recipeRequirementResolver,
             stockResultPublisher);
     // Defaults: not yet processed, no reservation, saves echo their argument.
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
