@@ -11,10 +11,10 @@ import org.springframework.kafka.config.TopicBuilder;
  * orders.confirmed} topic (produced by order_context, consumed here) and the outbound {@code
  * kitchen.ticket-status-changed} topic, plus their {@code .DLT} dead-letter siblings.
  *
- * <p>Anti-pattern guard: {@code kitchen.settlement-trigger} ({@code settleTriggerTopic}/{@code
- * settleTriggerDltTopic}) is already declared by {@code InventoryKafkaTopicConfig} — this config
- * intentionally does NOT redeclare it, even though kitchen produces to it, to avoid duplicate
- * {@link NewTopic} bean definitions for the same topic name.
+ * <p>Anti-pattern guard: the {@code kitchen.settlement-trigger} topic's {@link NewTopic} beans are
+ * already declared by {@code InventoryKafkaTopicConfig} — this config intentionally does NOT
+ * redeclare a bean for that topic, even though kitchen produces to it, to avoid duplicate {@link
+ * NewTopic} bean definitions for the same topic name.
  */
 @Configuration
 public class KitchenKafkaTopicConfig {
