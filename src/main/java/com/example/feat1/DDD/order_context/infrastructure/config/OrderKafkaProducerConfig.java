@@ -1,5 +1,6 @@
 package com.example.feat1.DDD.order_context.infrastructure.config;
 
+import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent;
 import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,5 +30,21 @@ public class OrderKafkaProducerConfig {
   public KafkaTemplate<String, OrderCreatedEvent> orderCreatedKafkaTemplate(
       ProducerFactory<String, OrderCreatedEvent> orderCreatedProducerFactory) {
     return new KafkaTemplate<>(orderCreatedProducerFactory);
+  }
+
+  @Bean
+  public ProducerFactory<String, OrderConfirmedEvent> orderConfirmedProducerFactory(
+      @Value("${spring.kafka.bootstrap-servers:localhost:9092}") String bootstrapServers) {
+    Map<String, Object> config = new HashMap<>();
+    config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonJsonSerializer.class);
+    return new DefaultKafkaProducerFactory<>(config);
+  }
+
+  @Bean
+  public KafkaTemplate<String, OrderConfirmedEvent> orderConfirmedKafkaTemplate(
+      ProducerFactory<String, OrderConfirmedEvent> orderConfirmedProducerFactory) {
+    return new KafkaTemplate<>(orderConfirmedProducerFactory);
   }
 }
