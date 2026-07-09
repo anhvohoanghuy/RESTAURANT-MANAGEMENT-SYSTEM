@@ -1,9 +1,6 @@
 package com.example.feat1.DDD.order_context.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -21,7 +18,8 @@ import com.example.feat1.DDD.menu_context.application.dto.MenuDtos.ToppingGroupR
 import com.example.feat1.DDD.menu_context.application.dto.MenuDtos.ToppingOptionRequest;
 import com.example.feat1.DDD.menu_context.domain.model.MenuStatus;
 import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
-import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
+import com.example.feat1.DDD.shared.outbox.entity.OutboxEventEntity;
+import com.example.feat1.DDD.shared.outbox.repository.OutboxEventRepository;
 import com.example.feat1.DDD.table_context.application.TableCatalogService;
 import com.example.feat1.DDD.table_context.application.TableOperationService;
 import com.example.feat1.DDD.table_context.application.dto.TableDtos.DiningAreaRequest;
@@ -31,9 +29,9 @@ import com.example.feat1.DDD.table_context.domain.model.TableStatus;
 import com.example.feat1.DDD.table_context.domain.port.TableOperationEventPublisher;
 import com.jayway.jsonpath.JsonPath;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -42,6 +40,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,13 +56,14 @@ class OrderSubmissionIntegrationTest {
   @Autowired private MenuCatalogService menuCatalogService;
   @Autowired private TableCatalogService tableCatalogService;
   @Autowired private TableOperationService tableOperationService;
+  @Autowired private OutboxEventRepository outboxEventRepository;
+  @Autowired private ObjectMapper objectMapper;
 
   @MockitoBean private RefreshTokenCache refreshTokenCache;
   @MockitoBean private GoogleIdTokenVerifier googleIdTokenVerifier;
   @MockitoBean private EmailNotificationPort emailNotificationPort;
   @MockitoBean private AuthRateLimitService authRateLimitService;
   @MockitoBean private LoginLockoutService loginLockoutService;
-  @MockitoBean private OrderEventPublisher orderEventPublisher;
   @MockitoBean private TableOperationEventPublisher tableOperationEventPublisher;
 
   @Test
@@ -108,13 +108,26 @@ class OrderSubmissionIntegrationTest {
 
     String orderId = JsonPath.read(submitResult.getResponse().getContentAsString(), "$.orderId");
 
-    ArgumentCaptor<OrderCreatedEvent> eventCaptor =
-        ArgumentCaptor.forClass(OrderCreatedEvent.class);
-    verify(orderEventPublisher).publishOrderCreated(eventCaptor.capture());
-    assertThat(eventCaptor.getValue().orderId()).isEqualTo(UUID.fromString(orderId));
-    assertThat(eventCaptor.getValue().table().tableId()).isEqualTo(tableId);
-    assertThat(eventCaptor.getValue().table().tableSessionId()).isEqualTo(tableSessionId);
-    assertThat(eventCaptor.getValue().lines()).hasSize(1);
+    // I-WR-02: OrderCreated is persisted to the outbox atomically with the submission, not
+    // published via afterCommit — assert the PENDING row instead of a direct publisher call.
+    List<OutboxEventEntity> pendingRows =
+        outboxEventRepository.findByStatusOrderByCreatedAtAsc("PENDING");
+    OutboxEventEntity outboxRow =
+        pendingRows.stream()
+            .filter(row -> row.getMsgKey().equals(orderId))
+            .filter(row -> row.getEventType().equals(OrderCreatedEvent.TYPE))
+            .findFirst()
+            .orElseThrow(
+                () -> new AssertionError("No PENDING OrderCreated outbox row for " + orderId));
+    assertThat(outboxRow.getAggregateType()).isEqualTo("ORDER");
+    assertThat(outboxRow.getAggregateId()).isEqualTo(UUID.fromString(orderId));
+
+    OrderCreatedEvent publishedEvent =
+        objectMapper.readValue(outboxRow.getPayload(), OrderCreatedEvent.class);
+    assertThat(publishedEvent.orderId()).isEqualTo(UUID.fromString(orderId));
+    assertThat(publishedEvent.table().tableId()).isEqualTo(tableId);
+    assertThat(publishedEvent.table().tableSessionId()).isEqualTo(tableSessionId);
+    assertThat(publishedEvent.lines()).hasSize(1);
 
     mockMvc
         .perform(get("/orders/{orderId}", orderId).header("Authorization", "Bearer " + accessToken))
@@ -133,13 +146,15 @@ class OrderSubmissionIntegrationTest {
   @Test
   void submitEmptyCartFailsWithStableCodeAndDoesNotPublish() throws Exception {
     String accessToken = registerAndGetAccessToken("empty-submit");
+    long pendingBefore = outboxEventRepository.findByStatusOrderByCreatedAtAsc("PENDING").size();
 
     mockMvc
         .perform(post("/orders").header("Authorization", "Bearer " + accessToken))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("ORDER_CART_EMPTY"));
 
-    verify(orderEventPublisher, never()).publishOrderCreated(any());
+    assertThat(outboxEventRepository.findByStatusOrderByCreatedAtAsc("PENDING"))
+        .hasSize((int) pendingBefore);
   }
 
   @Test

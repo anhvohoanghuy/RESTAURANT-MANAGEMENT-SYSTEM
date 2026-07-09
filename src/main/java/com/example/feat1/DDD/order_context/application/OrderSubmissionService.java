@@ -8,7 +8,6 @@ import com.example.feat1.DDD.order_context.application.dto.OrderDtos.SubmittedOr
 import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import com.example.feat1.DDD.order_context.domain.model.OrderDomainException;
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
-import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
 import com.example.feat1.DDD.order_context.domain.port.PaymentSummaryPort;
 import com.example.feat1.DDD.order_context.domain.snapshot.OrderPaymentSummary;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartEntity;
@@ -20,16 +19,16 @@ import com.example.feat1.DDD.order_context.infrastructure.entity.OrderLineToppin
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderCartLineRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderCartRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
+import com.example.feat1.DDD.shared.outbox.application.OutboxWriter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -37,8 +36,11 @@ public class OrderSubmissionService {
   private final OrderCartRepository cartRepository;
   private final OrderCartLineRepository cartLineRepository;
   private final OrderRepository orderRepository;
-  private final OrderEventPublisher orderEventPublisher;
+  private final OutboxWriter outboxWriter;
   private final PaymentSummaryPort paymentSummaryPort;
+
+  @Value("${order.events.order-created-topic:orders.created}")
+  private String orderCreatedTopic;
 
   @Transactional
   public SubmittedOrderResponse submit(UUID userId) {
@@ -78,7 +80,13 @@ public class OrderSubmissionService {
     cartRepository.save(cart);
 
     SubmittedOrderResponse response = toResponse(saved);
-    publishAfterCommit(toEvent(response));
+    outboxWriter.save(
+        "ORDER",
+        saved.getId(),
+        OrderCreatedEvent.TYPE,
+        orderCreatedTopic,
+        saved.getId().toString(),
+        toEvent(response));
     return response;
   }
 
@@ -220,19 +228,5 @@ public class OrderSubmissionService {
             .toList(),
         order.total(),
         order.submittedAt());
-  }
-
-  private void publishAfterCommit(OrderCreatedEvent event) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      orderEventPublisher.publishOrderCreated(event);
-      return;
-    }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            orderEventPublisher.publishOrderCreated(event);
-          }
-        });
   }
 }
