@@ -15,6 +15,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -55,6 +56,14 @@ public class KitchenTicketItemEntity {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private KitchenItemStatus status = KitchenItemStatus.QUEUED;
+
+  /** Who advanced this item to its current status (K-WR-02 accountability). Null until advanced. */
+  @Column(name = "advanced_by")
+  private UUID advancedBy;
+
+  /** When this item was last advanced (K-WR-02 accountability). Null until advanced. */
+  @Column(name = "advanced_at")
+  private Instant advancedAt;
 
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(

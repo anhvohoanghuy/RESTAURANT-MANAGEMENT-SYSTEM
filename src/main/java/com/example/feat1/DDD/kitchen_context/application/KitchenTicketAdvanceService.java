@@ -52,6 +52,8 @@ public class KitchenTicketAdvanceService {
     }
 
     item.setStatus(target);
+    item.setAdvancedBy(actorId);
+    item.setAdvancedAt(Instant.now());
     KitchenTicketItemEntity saved = itemRepository.save(item);
 
     if (current == KitchenItemStatus.QUEUED && target == KitchenItemStatus.PREPARING) {
