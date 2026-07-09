@@ -5,13 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import com.example.feat1.DDD.order_context.domain.model.CartStatus;
 import com.example.feat1.DDD.order_context.domain.model.OrderDomainException;
-import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
 import com.example.feat1.DDD.order_context.domain.port.PaymentSummaryPort;
 import com.example.feat1.DDD.order_context.domain.snapshot.OrderPaymentSummary;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderCartEntity;
@@ -21,6 +21,7 @@ import com.example.feat1.DDD.order_context.infrastructure.entity.OrderEntity;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderCartLineRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderCartRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
+import com.example.feat1.DDD.shared.outbox.application.OutboxWriter;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -28,12 +29,13 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class OrderSubmissionServiceTest {
   private OrderCartRepository cartRepository;
   private OrderCartLineRepository cartLineRepository;
   private OrderRepository orderRepository;
-  private OrderEventPublisher orderEventPublisher;
+  private OutboxWriter outboxWriter;
   private PaymentSummaryPort paymentSummaryPort;
   private OrderSubmissionService service;
 
@@ -50,15 +52,12 @@ class OrderSubmissionServiceTest {
     cartRepository = mock(OrderCartRepository.class);
     cartLineRepository = mock(OrderCartLineRepository.class);
     orderRepository = mock(OrderRepository.class);
-    orderEventPublisher = mock(OrderEventPublisher.class);
+    outboxWriter = mock(OutboxWriter.class);
     paymentSummaryPort = mock(PaymentSummaryPort.class);
     service =
         new OrderSubmissionService(
-            cartRepository,
-            cartLineRepository,
-            orderRepository,
-            orderEventPublisher,
-            paymentSummaryPort);
+            cartRepository, cartLineRepository, orderRepository, outboxWriter, paymentSummaryPort);
+    ReflectionTestUtils.setField(service, "orderCreatedTopic", "orders.created");
 
     when(cartRepository.save(any(OrderCartEntity.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -105,10 +104,28 @@ class OrderSubmissionServiceTest {
     assertThat(cart.getTableSessionId()).isNull();
 
     verify(cartLineRepository).deleteByCart_Id(cartId);
-    ArgumentCaptor<OrderCreatedEvent> eventCaptor =
-        ArgumentCaptor.forClass(OrderCreatedEvent.class);
-    verify(orderEventPublisher).publishOrderCreated(eventCaptor.capture());
-    OrderCreatedEvent event = eventCaptor.getValue();
+    ArgumentCaptor<String> aggregateTypeCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<UUID> aggregateIdCaptor = ArgumentCaptor.forClass(UUID.class);
+    ArgumentCaptor<String> eventTypeCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> msgKeyCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(outboxWriter, times(1))
+        .save(
+            aggregateTypeCaptor.capture(),
+            aggregateIdCaptor.capture(),
+            eventTypeCaptor.capture(),
+            topicCaptor.capture(),
+            msgKeyCaptor.capture(),
+            eventCaptor.capture());
+
+    assertThat(aggregateTypeCaptor.getValue()).isEqualTo("ORDER");
+    assertThat(aggregateIdCaptor.getValue()).isEqualTo(response.orderId());
+    assertThat(eventTypeCaptor.getValue()).isEqualTo(OrderCreatedEvent.TYPE);
+    assertThat(topicCaptor.getValue()).isEqualTo("orders.created");
+    assertThat(msgKeyCaptor.getValue()).isEqualTo(response.orderId().toString());
+
+    OrderCreatedEvent event = (OrderCreatedEvent) eventCaptor.getValue();
     assertThat(event.eventType()).isEqualTo(OrderCreatedEvent.TYPE);
     assertThat(event.orderId()).isEqualTo(response.orderId());
     assertThat(event.userId()).isEqualTo(userId);
@@ -128,7 +145,7 @@ class OrderSubmissionServiceTest {
         .isInstanceOf(OrderDomainException.class)
         .extracting("code")
         .isEqualTo(OrderDomainException.CART_EMPTY);
-    verify(orderEventPublisher, never()).publishOrderCreated(any());
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -142,7 +159,7 @@ class OrderSubmissionServiceTest {
         .isInstanceOf(OrderDomainException.class)
         .extracting("code")
         .isEqualTo(OrderDomainException.CART_TABLE_REQUIRED);
-    verify(orderEventPublisher, never()).publishOrderCreated(any());
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
   @Test
