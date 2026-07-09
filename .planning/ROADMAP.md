@@ -432,7 +432,7 @@ Plans:
 **Goal:** Close the latent runtime risk where dedicated Payment/Table Kafka producer factories still override the global Jackson-3 producer serializer with legacy `JsonSerializer`, which can fail for event payloads containing `Instant`.
 **Requirements**: [D-01, D-02, D-03, D-04, D-05, D-06, D-07]
 **Depends on:** Phase 17.2
-**Plans:** 1/1 planned
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 17.3-01-PLAN.md - Align Payment/Table dedicated Kafka producers with Jackson-3 and add Instant serde/config regression guards
+- [x] 17.3-01-PLAN.md - Align Payment/Table dedicated Kafka producers with Jackson-3 and add Instant serde/config regression guards
