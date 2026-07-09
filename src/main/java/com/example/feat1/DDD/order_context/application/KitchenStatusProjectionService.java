@@ -5,15 +5,12 @@ import com.example.feat1.DDD.kitchen_context.application.event.KitchenTicketStat
 import com.example.feat1.DDD.kitchen_context.domain.model.KitchenItemStatus;
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderEntity;
-import com.example.feat1.DDD.order_context.infrastructure.entity.OrderProcessedEventEntity;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProcessedEventRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,21 +52,17 @@ public class KitchenStatusProjectionService {
 
   private final OrderProcessedEventRepository processedEventRepository;
   private final OrderRepository orderRepository;
+  private final OrderLedgerWriter ledgerWriter;
 
   @Transactional
   public void onTicketStatusChanged(KitchenTicketStatusChangedEvent event) {
-    // (1) Idempotency: fast pre-check, then insert + immediate flush as the authoritative guard.
+    // (1) Idempotency: fast pre-check, then delegate the insert+flush to a REQUIRES_NEW ledger
+    // writer (I-WR-01) so a concurrent-duplicate violation rolls back only its own inner
+    // transaction instead of marking this business transaction rollback-only.
     if (processedEventRepository.existsByEventIdAndConsumerName(event.eventId(), CONSUMER_NAME)) {
       return;
     }
-    try {
-      OrderProcessedEventEntity ledger = new OrderProcessedEventEntity();
-      ledger.setEventId(event.eventId());
-      ledger.setConsumerName(CONSUMER_NAME);
-      ledger.setProcessedAt(Instant.now());
-      processedEventRepository.saveAndFlush(ledger);
-    } catch (DataIntegrityViolationException duplicate) {
-      // Concurrent delivery inserted the same (eventId, consumer) first -- treat as a replay.
+    if (!ledgerWriter.tryInsert(event.eventId(), CONSUMER_NAME)) {
       return;
     }
 
