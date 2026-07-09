@@ -44,6 +44,7 @@ class InventoryReservationServiceTest {
   private IngredientRepository ingredientRepository;
   private MenuRecipeCostingPort menuRecipeCostingPort;
   private InventoryStockResultPublisher stockResultPublisher;
+  private InventoryLedgerWriter ledgerWriter;
   private InventoryReservationService service;
 
   @BeforeEach
@@ -54,6 +55,7 @@ class InventoryReservationServiceTest {
     ingredientRepository = mock(IngredientRepository.class);
     menuRecipeCostingPort = mock(MenuRecipeCostingPort.class);
     stockResultPublisher = mock(InventoryStockResultPublisher.class);
+    ledgerWriter = mock(InventoryLedgerWriter.class);
     // Real resolver wired with the existing mocks so recipe-resolution behavior is exercised
     // end-to-end through the extracted shared collaborator (D-02, behavior-preserving refactor).
     RecipeRequirementResolver recipeRequirementResolver =
@@ -65,11 +67,12 @@ class InventoryReservationServiceTest {
             balanceRepository,
             ingredientRepository,
             recipeRequirementResolver,
-            stockResultPublisher);
-    // Defaults: not yet processed, no reservation, saves echo their argument.
+            stockResultPublisher,
+            ledgerWriter);
+    // Defaults: not yet processed, no reservation, ledger insert succeeds, saves echo their arg.
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
     when(reservationRepository.existsByOrderId(any())).thenReturn(false);
-    when(processedEventRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
     when(balanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(reservationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
   }
@@ -205,7 +208,7 @@ class InventoryReservationServiceTest {
 
     service.onOrderCreated(event);
 
-    verify(processedEventRepository, never()).saveAndFlush(any());
+    verify(ledgerWriter, never()).tryInsert(any(), any());
     verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
     verify(reservationRepository, never()).save(any());
     verify(stockResultPublisher, never()).publishStockResult(any());
@@ -219,7 +222,21 @@ class InventoryReservationServiceTest {
 
     service.onOrderCreated(event);
 
-    verify(processedEventRepository, never()).saveAndFlush(any());
+    verify(ledgerWriter, never()).tryInsert(any(), any());
+    verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
+    verify(reservationRepository, never()).save(any());
+    verify(stockResultPublisher, never()).publishStockResult(any());
+  }
+
+  @Test
+  void concurrentDuplicateLedgerInsertIsSkippedWithoutPoisoningTransaction() {
+    UUID dishId = UUID.randomUUID();
+    OrderCreatedEvent event = event(line(dishId, 1));
+    when(ledgerWriter.tryInsert(event.eventId(), InventoryReservationService.CONSUMER_NAME))
+        .thenReturn(false);
+
+    service.onOrderCreated(event);
+
     verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
     verify(reservationRepository, never()).save(any());
     verify(stockResultPublisher, never()).publishStockResult(any());

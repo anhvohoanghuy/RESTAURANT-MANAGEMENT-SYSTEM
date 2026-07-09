@@ -3,7 +3,6 @@ package com.example.feat1.DDD.inventory_context.application;
 import com.example.feat1.DDD.inventory_context.domain.port.InventoryStockResultPublisher;
 import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementResolver;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientEntity;
-import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryProcessedEventEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockBalanceEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.IngredientRepository;
@@ -27,7 +26,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -64,6 +62,7 @@ public class InventoryReservationService {
   private final IngredientRepository ingredientRepository;
   private final RecipeRequirementResolver recipeRequirementResolver;
   private final InventoryStockResultPublisher stockResultPublisher;
+  private final InventoryLedgerWriter ledgerWriter;
 
   @Transactional
   public void onOrderCreated(OrderCreatedEvent event) {
@@ -77,15 +76,11 @@ public class InventoryReservationService {
       log.debug("Skipping already-processed OrderCreated eventId={} orderId={}", eventId, orderId);
       return;
     }
-    try {
-      InventoryProcessedEventEntity ledger = new InventoryProcessedEventEntity();
-      ledger.setEventId(eventId);
-      ledger.setConsumerName(CONSUMER_NAME);
-      ledger.setProcessedAt(Instant.now());
-      // saveAndFlush forces the INSERT now (the @Id is GenerationType.UUID and would otherwise not
-      // flush until commit), so a concurrent-duplicate violation surfaces inside this try block.
-      processedEventRepository.saveAndFlush(ledger);
-    } catch (DataIntegrityViolationException duplicate) {
+    // Insert the ledger row in its OWN REQUIRES_NEW transaction (WR-01) so a concurrent-duplicate
+    // constraint violation rolls back only the inner transaction — it never poisons this
+    // reservation
+    // transaction.
+    if (!ledgerWriter.tryInsert(eventId, CONSUMER_NAME)) {
       log.debug(
           "Concurrent duplicate OrderCreated eventId={} orderId={} — skipping", eventId, orderId);
       return;
