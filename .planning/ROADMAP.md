@@ -402,7 +402,7 @@ Plans:
 **Goal:** Close the outstanding robustness/quality debt from the Phase 15 and Phase 17 code reviews across the Kitchen and Inventory/Order bounded contexts — durable messaging (whenComplete + a full transactional outbox for the three saga events), advance audit trail, fail-closed status projection, REQUIRES_NEW ledger idempotency, rejection_reason overflow fix, and the global Jackson-3 serializer switch. No new features, no new dependencies; existing 156-test suite stays green.
 **Requirements**: [K-WR-01, K-WR-02, K-WR-03, K-IN-01, K-IN-02, I-WR-01, I-WR-02, I-WR-03, I-WR-04, I-WR-05]
 **Depends on:** Phase 17
-**Plans:** 5/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 
@@ -414,5 +414,5 @@ Plans:
 - [x] 17.1-05-PLAN.md — transactional outbox foundation: entity, SKIP LOCKED repo, in-tx writer, scheduled relay + crash-recovery test (I-WR-02)
 
 **Wave 2** *(blocked on Wave 1)*
-- [ ] 17.1-06-PLAN.md — order-side saga outbox cutover + OrderLedgerWriter adoption + rejection_reason TEXT/truncation (I-WR-02, I-WR-01, I-WR-04)
-- [ ] 17.1-07-PLAN.md — inventory-side saga outbox cutover + InventoryLedgerWriter adoption (I-WR-02, I-WR-01)
+- [x] 17.1-06-PLAN.md — order-side saga outbox cutover + OrderLedgerWriter adoption + rejection_reason TEXT/truncation (I-WR-02, I-WR-01, I-WR-04)
+- [x] 17.1-07-PLAN.md — inventory-side saga outbox cutover + InventoryLedgerWriter adoption (I-WR-02, I-WR-01)
