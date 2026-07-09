@@ -7,23 +7,20 @@ import com.example.feat1.DDD.order_context.application.event.OrderStockResultEve
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Result;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Shortfall;
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
-import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderLineEntity;
-import com.example.feat1.DDD.order_context.infrastructure.entity.OrderProcessedEventEntity;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProcessedEventRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
+import com.example.feat1.DDD.shared.outbox.application.OutboxWriter;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Terminal half of the order-confirmation saga: reacts to Inventory's stock verdict and
@@ -40,24 +37,28 @@ public class OrderConfirmationService {
   /** Ledger consumer identity for the order-side stock-result handler. */
   static final String CONSUMER_NAME = "order-stock-result";
 
+  /** Cap on the persisted rejection reason (T-17.1-18 / I-WR-04) — column is widened to match. */
+  static final int MAX_REASON_LEN = 60000;
+
+  private static final String TRUNCATION_SUFFIX = "... (truncated)";
+
   private final OrderProcessedEventRepository processedEventRepository;
   private final OrderRepository orderRepository;
-  private final OrderEventPublisher orderEventPublisher;
+  private final OrderLedgerWriter ledgerWriter;
+  private final OutboxWriter outboxWriter;
+
+  @Value("${order.events.order-confirmed-topic:orders.confirmed}")
+  private String orderConfirmedTopic;
 
   @Transactional
   public void onStockResult(OrderStockResultEvent event) {
-    // (1) Idempotency: fast pre-check, then insert + immediate flush as the authoritative guard.
+    // (1) Idempotency: fast pre-check, then the REQUIRES_NEW ledger insert as the authoritative
+    // guard — isolated in its own transaction so a concurrent-duplicate violation never poisons
+    // this outer transaction (I-WR-01).
     if (processedEventRepository.existsByEventIdAndConsumerName(event.eventId(), CONSUMER_NAME)) {
       return;
     }
-    try {
-      OrderProcessedEventEntity ledger = new OrderProcessedEventEntity();
-      ledger.setEventId(event.eventId());
-      ledger.setConsumerName(CONSUMER_NAME);
-      ledger.setProcessedAt(Instant.now());
-      processedEventRepository.saveAndFlush(ledger);
-    } catch (DataIntegrityViolationException duplicate) {
-      // Concurrent delivery inserted the same (eventId, consumer) first — treat as a replay.
+    if (!ledgerWriter.tryInsert(event.eventId(), CONSUMER_NAME)) {
       return;
     }
 
@@ -74,7 +75,13 @@ public class OrderConfirmationService {
     // (3) Apply the verdict.
     if (event.result() == Result.CONFIRMED) {
       order.setStatus(OrderStatus.CONFIRMED);
-      publishAfterCommit(toOrderConfirmedEvent(order));
+      outboxWriter.save(
+          "ORDER",
+          order.getId(),
+          OrderConfirmedEvent.TYPE,
+          orderConfirmedTopic,
+          order.getId().toString(),
+          toOrderConfirmedEvent(order));
     } else {
       order.setStatus(OrderStatus.REJECTED);
       order.setRejectionReason(describe(event.shortfalls()));
@@ -103,34 +110,37 @@ public class OrderConfirmationService {
         line.getId(), line.getDishId(), line.getDishName(), line.getQuantity(), toppings);
   }
 
-  private void publishAfterCommit(OrderConfirmedEvent event) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      orderEventPublisher.publishOrderConfirmed(event);
-      return;
+  private String describe(List<Shortfall> shortfalls) {
+    String description;
+    if (shortfalls == null || shortfalls.isEmpty()) {
+      description = "Insufficient stock";
+    } else {
+      description =
+          "Insufficient stock: "
+              + shortfalls.stream()
+                  .map(
+                      s ->
+                          s.ingredientName()
+                              + " (required "
+                              + s.required()
+                              + ", available "
+                              + s.available()
+                              + ")")
+                  .collect(Collectors.joining(", "));
     }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            orderEventPublisher.publishOrderConfirmed(event);
-          }
-        });
+    return truncate(description);
   }
 
-  private String describe(List<Shortfall> shortfalls) {
-    if (shortfalls == null || shortfalls.isEmpty()) {
-      return "Insufficient stock";
+  /**
+   * Caps the persisted rejection reason at {@link #MAX_REASON_LEN} (T-17.1-18 / I-WR-04). A
+   * multi-ingredient rejection can otherwise produce an unbounded string; the column is widened to
+   * TEXT AND the application layer bounds the value defensively.
+   */
+  private String truncate(String description) {
+    if (description.length() <= MAX_REASON_LEN) {
+      return description;
     }
-    return "Insufficient stock: "
-        + shortfalls.stream()
-            .map(
-                s ->
-                    s.ingredientName()
-                        + " (required "
-                        + s.required()
-                        + ", available "
-                        + s.available()
-                        + ")")
-            .collect(Collectors.joining(", "));
+    return description.substring(0, MAX_REASON_LEN - TRUNCATION_SUFFIX.length())
+        + TRUNCATION_SUFFIX;
   }
 }

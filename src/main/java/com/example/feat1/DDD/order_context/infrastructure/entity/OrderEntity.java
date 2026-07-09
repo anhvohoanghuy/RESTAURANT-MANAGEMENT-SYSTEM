@@ -36,7 +36,7 @@ public class OrderEntity {
   @Column(nullable = false)
   private OrderStatus status = OrderStatus.PENDING_CONFIRMATION;
 
-  @Column(name = "rejection_reason")
+  @Column(name = "rejection_reason", length = 65535)
   private String rejectionReason;
 
   @Column(name = "submitted_at", nullable = false)

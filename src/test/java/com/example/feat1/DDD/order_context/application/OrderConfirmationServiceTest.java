@@ -13,29 +13,27 @@ import com.example.feat1.DDD.order_context.application.event.OrderStockResultEve
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Result;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Shortfall;
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
-import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderLineEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderLineToppingSnapshot;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProcessedEventRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
+import com.example.feat1.DDD.shared.outbox.application.OutboxWriter;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class OrderConfirmationServiceTest {
   private OrderProcessedEventRepository processedEventRepository;
   private OrderRepository orderRepository;
-  private OrderEventPublisher orderEventPublisher;
+  private OrderLedgerWriter ledgerWriter;
+  private OutboxWriter outboxWriter;
   private OrderConfirmationService service;
 
   private final UUID eventId = UUID.randomUUID();
@@ -48,23 +46,19 @@ class OrderConfirmationServiceTest {
   void setUp() {
     processedEventRepository = mock(OrderProcessedEventRepository.class);
     orderRepository = mock(OrderRepository.class);
-    orderEventPublisher = mock(OrderEventPublisher.class);
+    ledgerWriter = mock(OrderLedgerWriter.class);
+    outboxWriter = mock(OutboxWriter.class);
     service =
         new OrderConfirmationService(
-            processedEventRepository, orderRepository, orderEventPublisher);
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.clearSynchronization();
-    }
+            processedEventRepository, orderRepository, ledgerWriter, outboxWriter);
+    ReflectionTestUtils.setField(service, "orderConfirmedTopic", "orders.confirmed");
   }
 
   @Test
-  void confirmedResultTransitionsPendingOrderToConfirmed() {
+  void confirmedResultTransitionsPendingOrderToConfirmedAndWritesOutboxRowInTx() {
     OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(true);
     when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
     service.onStockResult(confirmedEvent());
@@ -72,9 +66,28 @@ class OrderConfirmationServiceTest {
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
     assertThat(order.getRejectionReason()).isNull();
 
-    ArgumentCaptor<OrderConfirmedEvent> captor = ArgumentCaptor.forClass(OrderConfirmedEvent.class);
-    verify(orderEventPublisher, times(1)).publishOrderConfirmed(captor.capture());
-    OrderConfirmedEvent published = captor.getValue();
+    ArgumentCaptor<String> aggregateTypeCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<UUID> aggregateIdCaptor = ArgumentCaptor.forClass(UUID.class);
+    ArgumentCaptor<String> eventTypeCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> msgKeyCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(outboxWriter, times(1))
+        .save(
+            aggregateTypeCaptor.capture(),
+            aggregateIdCaptor.capture(),
+            eventTypeCaptor.capture(),
+            topicCaptor.capture(),
+            msgKeyCaptor.capture(),
+            eventCaptor.capture());
+
+    assertThat(aggregateTypeCaptor.getValue()).isEqualTo("ORDER");
+    assertThat(aggregateIdCaptor.getValue()).isEqualTo(orderId);
+    assertThat(eventTypeCaptor.getValue()).isEqualTo(OrderConfirmedEvent.TYPE);
+    assertThat(topicCaptor.getValue()).isEqualTo("orders.confirmed");
+    assertThat(msgKeyCaptor.getValue()).isEqualTo(orderId.toString());
+
+    OrderConfirmedEvent published = (OrderConfirmedEvent) eventCaptor.getValue();
     assertThat(published.orderId()).isEqualTo(orderId);
     assertThat(published.lines()).hasSize(1);
     OrderConfirmedEvent.OrderConfirmedLine publishedLine = published.lines().get(0);
@@ -89,61 +102,81 @@ class OrderConfirmationServiceTest {
   void rejectedResultTransitionsPendingOrderToRejectedWithReason() {
     OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(true);
     when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
     service.onStockResult(rejectedEvent());
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.REJECTED);
     assertThat(order.getRejectionReason()).isNotBlank().contains("Pho Broth");
-    verify(orderEventPublisher, never()).publishOrderConfirmed(any());
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
   @Test
-  void duplicateEventIsNoOpAndNeverLoadsOrder() {
+  void rejectedResultWithManyShortfallsCapsRejectionReasonAtMaxLength() {
+    OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
+    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(true);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    List<Shortfall> manyShortfalls = new ArrayList<>();
+    for (int i = 0; i < 2000; i++) {
+      manyShortfalls.add(
+          new Shortfall(
+              UUID.randomUUID(), "Ingredient-" + i, new BigDecimal("10.0"), new BigDecimal("2.0")));
+    }
+    OrderStockResultEvent event =
+        new OrderStockResultEvent(
+            eventId,
+            OrderStockResultEvent.REJECTED_TYPE,
+            java.time.Instant.now(),
+            orderId,
+            Result.REJECTED,
+            manyShortfalls);
+
+    service.onStockResult(event);
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.REJECTED);
+    assertThat(order.getRejectionReason()).isNotNull();
+    assertThat(order.getRejectionReason().length())
+        .isEqualTo(OrderConfirmationService.MAX_REASON_LEN);
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void duplicateEventFastPreCheckIsNoOpAndNeverLoadsOrder() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(true);
 
     service.onStockResult(confirmedEvent());
 
     verify(orderRepository, never()).findById(any());
-    verify(processedEventRepository, never()).saveAndFlush(any());
-    verify(orderEventPublisher, never()).publishOrderConfirmed(any());
+    verify(ledgerWriter, never()).tryInsert(any(), any());
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void concurrentDuplicateLedgerInsertIsNoOpAndDoesNotThrow() {
+    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(false);
+
+    service.onStockResult(confirmedEvent());
+
+    verify(orderRepository, never()).findById(any());
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
   @Test
   void nonPendingOrderIsNotTransitioned() {
     OrderEntity order = orderWithStatus(OrderStatus.CONFIRMED);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(true);
     when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
     service.onStockResult(rejectedEvent());
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
     assertThat(order.getRejectionReason()).isNull();
-    verify(orderEventPublisher, never()).publishOrderConfirmed(any());
-  }
-
-  @Test
-  void confirmedResultRegistersPublishAsAfterCommitSynchronizationNotMidTransaction() {
-    OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
-    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-
-    TransactionSynchronizationManager.initSynchronization();
-    try {
-      service.onStockResult(confirmedEvent());
-
-      // Not invoked mid-transaction: the synchronization is only registered, not yet run.
-      verify(orderEventPublisher, never()).publishOrderConfirmed(any());
-
-      List<TransactionSynchronization> synchronizations =
-          TransactionSynchronizationManager.getSynchronizations();
-      assertThat(synchronizations).isNotEmpty();
-      synchronizations.forEach(TransactionSynchronization::afterCommit);
-
-      verify(orderEventPublisher, times(1)).publishOrderConfirmed(any());
-    } finally {
-      TransactionSynchronizationManager.clearSynchronization();
-    }
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
   private OrderEntity orderWithStatus(OrderStatus status) {
@@ -178,7 +211,7 @@ class OrderConfirmationServiceTest {
     return new OrderStockResultEvent(
         eventId,
         OrderStockResultEvent.CONFIRMED_TYPE,
-        Instant.now(),
+        java.time.Instant.now(),
         orderId,
         Result.CONFIRMED,
         List.of());
@@ -190,7 +223,7 @@ class OrderConfirmationServiceTest {
     return new OrderStockResultEvent(
         eventId,
         OrderStockResultEvent.REJECTED_TYPE,
-        Instant.now(),
+        java.time.Instant.now(),
         orderId,
         Result.REJECTED,
         List.of(shortfall));
