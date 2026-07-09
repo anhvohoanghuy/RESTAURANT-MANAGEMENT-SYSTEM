@@ -118,6 +118,40 @@ class KitchenStatusProjectionServiceTest {
   }
 
   @Test
+  void unknownCurrentRankFailsClosedAndDoesNotAdvance() {
+    // Order is still pre-CONFIRMED (PENDING_CONFIRMATION has no FULFILLMENT_RANK entry). A
+    // fulfillment snapshot must never fail-open past this unknown rank (K-WR-03).
+    OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.PREPARING)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING_CONFIRMATION);
+  }
+
+  @Test
+  void confirmedOrderStillAdvancesToPreparing() {
+    // Forward transition from a known rank (CONFIRMED) must still work after the fail-closed
+    // guard is added (K-WR-03).
+    OrderEntity order = orderWithStatus(OrderStatus.CONFIRMED);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.PREPARING)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.PREPARING);
+  }
+
+  @Test
+  void readyOrderDoesNotRegressToPreparing() {
+    OrderEntity order = orderWithStatus(OrderStatus.READY);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.PREPARING)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.READY);
+  }
+
+  @Test
   void rejectedOrderIsNeverModified() {
     OrderEntity order = orderWithStatus(OrderStatus.REJECTED);
     when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
