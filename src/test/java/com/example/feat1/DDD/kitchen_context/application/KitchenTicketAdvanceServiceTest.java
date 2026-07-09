@@ -71,6 +71,9 @@ class KitchenTicketAdvanceServiceTest {
     assertThat(published.eventType()).isEqualTo(SettleTriggerEvent.TYPE);
 
     verify(statusChangedPublisher, times(1)).publishTicketStatusChanged(any());
+
+    assertThat(item.getAdvancedBy()).isEqualTo(actorId);
+    assertThat(item.getAdvancedAt()).isNotNull();
   }
 
   @Test
@@ -130,6 +133,8 @@ class KitchenTicketAdvanceServiceTest {
     verify(itemRepository, never()).save(any());
     verify(settleTriggerPublisher, never()).publishSettleTrigger(any());
     verify(statusChangedPublisher, never()).publishTicketStatusChanged(any());
+    assertThat(item.getAdvancedBy()).isNull();
+    assertThat(item.getAdvancedAt()).isNull();
   }
 
   @Test
