@@ -8,6 +8,7 @@ import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementR
 import com.example.feat1.DDD.inventory_context.domain.snapshot.OrderLineRecipeSnapshot;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryLineSettlementEntity;
+import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryProcessedEventEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockBalanceEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockMovementEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity;
@@ -34,19 +35,17 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Settles a single order line's held reservation into an actual stock deduction (D-02..D-06). This
  * is the inverse of the whole-order {@link InventoryReservationService} reserve saga: instead of
- * incrementing {@code reservedQuantity} it decrements BOTH {@code reservedQuantity} and {@code
+ * incrementing {@code reservedQuantity} it decrements both {@code reservedQuantity} and {@code
  * quantityOnHand} for the one line's re-resolved recipe.
  *
- * <p>On a {@link SettleTriggerEvent} it: (1) short-circuits on either idempotency guard — the
- * eventId ledger or the per-(orderId,orderLineId) settlement row (D-05); (2) records the eventId in
- * the {@link InventoryLedgerWriter} REQUIRES_NEW transaction so a concurrent duplicate cannot
- * poison this transaction (WR-01 / D-06); (3) re-resolves the line's recipe via the shared {@link
- * RecipeRequirementResolver} (D-02); (4) locks the reservation row FIRST, then ingredient balance
- * rows in ascending-ingredientId order (deadlock-free total order); (5) subtracts on-hand +
- * reserved with a non-negative clamp that logs an anomaly and never throws (D-03); (6) writes a
- * CONSUMPTION audit movement directly per ingredient (WR-02 / D-06); (7) records the per-line
- * settlement; and (8) flips the reservation to SETTLED only once {@code countByOrderId ==
- * totalLines} (D-04).
+ * <p>On a {@link SettleTriggerEvent} it: (1) short-circuits on either idempotency guard, the
+ * eventId ledger or the per-(orderId, orderLineId) settlement row (D-05); (2) re-resolves the
+ * line's recipe via the shared {@link RecipeRequirementResolver} (D-02); (3) locks the reservation
+ * row first, then ingredient balance rows in ascending ingredientId order; (4) subtracts on-hand
+ * and reserved with a non-negative clamp (D-03); (5) writes a CONSUMPTION audit movement directly
+ * per ingredient (WR-02 / D-06); (6) records the per-line settlement; (7) flips the reservation to
+ * SETTLED only once {@code countByOrderId == totalLines} (D-04); and (8) records the
+ * processed-event ledger row last, in the same transaction as the settlement mutation.
  *
  * <p>A missing reservation throws (routed to retry then DLT by the listener wiring) rather than
  * being silently swallowed, so a transient settle-before-reserve ordering race can self-heal
@@ -65,7 +64,6 @@ public class InventoryReservationSettlementService {
   private static final String DEFAULT_LOCATION = InventoryStockBalanceEntity.DEFAULT_LOCATION;
   private static final String REFERENCE_TYPE = "ORDER_LINE";
 
-  private final InventoryLedgerWriter ledgerWriter;
   private final InventoryProcessedEventRepository processedEventRepository;
   private final InventoryLineSettlementRepository lineSettlementRepository;
   private final StockReservationRepository reservationRepository;
@@ -80,11 +78,7 @@ public class InventoryReservationSettlementService {
     UUID orderId = event.orderId();
     UUID orderLineId = event.orderLineId();
 
-    // (1) Two independent idempotency guards — both must pass. The eventId ledger catches a
-    // replayed
-    // delivery; the per-(orderId,orderLineId) row catches the same line arriving under a NEW
-    // eventId
-    // (Pitfall 4). Neither is redundant (D-05).
+    // Two independent idempotency guards: eventId replay and same order-line under a new eventId.
     if (processedEventRepository.existsByEventIdAndConsumerName(eventId, CONSUMER_NAME)
         || lineSettlementRepository.existsByOrderIdAndOrderLineId(orderId, orderLineId)) {
       log.debug(
@@ -95,16 +89,6 @@ public class InventoryReservationSettlementService {
       return;
     }
 
-    // (2) Isolated REQUIRES_NEW ledger insert. A concurrent duplicate returns false without
-    // throwing
-    // so this business transaction is never marked rollback-only (WR-01 / D-06).
-    if (!ledgerWriter.tryInsert(eventId, CONSUMER_NAME)) {
-      log.debug("Concurrent duplicate settle trigger eventId={} — skipping", eventId);
-      return;
-    }
-
-    // (3) Re-resolve THIS line's recipe via the shared resolver (D-02). Missing line data cannot be
-    // settled — throw so the delivery is retried then routed to the DLT (D-05).
     OrderLineRecipeSnapshot line =
         orderLineLookupPort
             .findLine(orderId, orderLineId)
@@ -112,24 +96,16 @@ public class InventoryReservationSettlementService {
                 () -> InventoryDomainException.settlementOrderLineMissing(orderId, orderLineId));
     Map<UUID, BigDecimal> required = resolveLineRequirements(line);
 
-    // (4) Lock the reservation row FIRST (canonical total lock order — reservation before
-    // balances).
-    // A missing reservation is uncaught so it retries then lands on the DLT (D-05).
     StockReservationEntity reservation =
         reservationRepository
             .lockByOrderId(orderId)
             .orElseThrow(() -> InventoryDomainException.settlementReservationMissing(orderId));
     if (reservation.getStatus() != ReservationStatus.HELD) {
-      // Already fully settled — benign redelivery signal, not an error (Open Q1).
       log.debug(
-          "Reservation for order {} already settled — skipping line {}", orderId, orderLineId);
+          "Reservation for order {} already settled - skipping line {}", orderId, orderLineId);
       return;
     }
 
-    // (5)+(6) Iterate ingredients in ascending-id order so all settlements acquire balance locks in
-    // the same sequence (deadlock-free). Subtract on-hand + reserved with a non-negative clamp,
-    // then
-    // write a CONSUMPTION audit movement directly.
     Instant now = Instant.now();
     List<UUID> sortedIngredientIds = required.keySet().stream().sorted().toList();
     for (UUID ingredientId : sortedIngredientIds) {
@@ -137,17 +113,15 @@ public class InventoryReservationSettlementService {
       Optional<InventoryStockBalanceEntity> locked =
           balanceRepository.lockByIngredientAndLocation(ingredientId, DEFAULT_LOCATION);
       if (locked.isEmpty()) {
-        // No balance to deduct from — cannot settle this ingredient; log and continue (never
-        // throw).
         log.warn(
-            "No stock balance for ingredient {} (order {} line {}) — skipping deduction",
+            "No stock balance for ingredient {} (order {} line {}) - skipping deduction",
             ingredientId,
             orderId,
             orderLineId);
         continue;
       }
-      InventoryStockBalanceEntity balance = locked.get();
 
+      InventoryStockBalanceEntity balance = locked.get();
       BigDecimal newReserved = balance.getReservedQuantity().subtract(need);
       BigDecimal newOnHand = balance.getQuantityOnHand().subtract(need);
       if (newReserved.compareTo(BigDecimal.ZERO) < 0) {
@@ -164,12 +138,12 @@ public class InventoryReservationSettlementService {
             orderId);
         newOnHand = BigDecimal.ZERO;
       }
+
       BigDecimal scaledOnHand = scale(newOnHand);
       balance.setReservedQuantity(scale(newReserved));
       balance.setQuantityOnHand(scaledOnHand);
       balance.setLastMovementAt(now);
       balance.setUpdatedAt(now);
-      // Managed entity — rely on dirty checking (mirrors the reserve loop; no redundant save).
 
       IngredientEntity ingredient = balance.getIngredient();
       String baseUnit = ingredient.getBaseUnit();
@@ -184,25 +158,23 @@ public class InventoryReservationSettlementService {
       movement.setResultingBalance(scaledOnHand);
       movement.setReferenceType(REFERENCE_TYPE);
       movement.setReferenceId(orderLineId);
-      movement.setActorId(null); // system-triggered settlement, no human actor
+      movement.setActorId(null);
       movement.setCreatedAt(now);
       movementRepository.save(movement);
     }
 
-    // (7) Record the per-line settlement (the durable D-05 guard + D-04 counter).
     InventoryLineSettlementEntity settlement = new InventoryLineSettlementEntity();
     settlement.setOrderId(orderId);
     settlement.setOrderLineId(orderLineId);
     settlement.setSettledAt(now);
     lineSettlementRepository.save(settlement);
 
-    // (8) Flip the reservation to SETTLED only when the last line settles. count-then-flip is
-    // atomic
-    // against sibling settlements because we hold the reservation lock (D-04).
     long settledCount = lineSettlementRepository.countByOrderId(orderId);
     if (settledCount >= event.totalLines()) {
       reservation.setStatus(ReservationStatus.SETTLED);
     }
+
+    recordProcessed(eventId);
   }
 
   private Map<UUID, BigDecimal> resolveLineRequirements(OrderLineRecipeSnapshot line) {
@@ -220,5 +192,13 @@ public class InventoryReservationSettlementService {
 
   private BigDecimal scale(BigDecimal value) {
     return value.setScale(QUANTITY_SCALE, RoundingMode.HALF_UP);
+  }
+
+  private void recordProcessed(UUID eventId) {
+    InventoryProcessedEventEntity ledger = new InventoryProcessedEventEntity();
+    ledger.setEventId(eventId);
+    ledger.setConsumerName(CONSUMER_NAME);
+    ledger.setProcessedAt(Instant.now());
+    processedEventRepository.save(ledger);
   }
 }

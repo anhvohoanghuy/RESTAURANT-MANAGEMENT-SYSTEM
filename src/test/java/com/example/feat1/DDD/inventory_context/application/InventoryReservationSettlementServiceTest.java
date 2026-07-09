@@ -21,6 +21,7 @@ import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementR
 import com.example.feat1.DDD.inventory_context.domain.snapshot.OrderLineRecipeSnapshot;
 import com.example.feat1.DDD.inventory_context.domain.snapshot.RecipeCostingSnapshot;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientEntity;
+import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryProcessedEventEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockBalanceEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockMovementEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity;
@@ -41,11 +42,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.dao.DataIntegrityViolationException;
 
 class InventoryReservationSettlementServiceTest {
   private static final String DEFAULT = InventoryStockBalanceEntity.DEFAULT_LOCATION;
 
-  private InventoryLedgerWriter ledgerWriter;
   private InventoryProcessedEventRepository processedEventRepository;
   private InventoryLineSettlementRepository lineSettlementRepository;
   private StockReservationRepository reservationRepository;
@@ -58,7 +59,6 @@ class InventoryReservationSettlementServiceTest {
 
   @BeforeEach
   void setUp() {
-    ledgerWriter = mock(InventoryLedgerWriter.class);
     processedEventRepository = mock(InventoryProcessedEventRepository.class);
     lineSettlementRepository = mock(InventoryLineSettlementRepository.class);
     reservationRepository = mock(StockReservationRepository.class);
@@ -72,7 +72,6 @@ class InventoryReservationSettlementServiceTest {
         new RecipeRequirementResolver(menuRecipeCostingPort, ingredientRepository);
     service =
         new InventoryReservationSettlementService(
-            ledgerWriter,
             processedEventRepository,
             lineSettlementRepository,
             reservationRepository,
@@ -81,10 +80,10 @@ class InventoryReservationSettlementServiceTest {
             orderLineLookupPort,
             resolver);
 
-    // Defaults: not processed, not settled, ledger insert succeeds, saves echo.
+    // Defaults: not processed, not settled, saves echo.
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
     when(lineSettlementRepository.existsByOrderIdAndOrderLineId(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
+    when(processedEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(balanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(movementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(lineSettlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -171,6 +170,62 @@ class InventoryReservationSettlementServiceTest {
   }
 
   @Test
+  void recordsProcessedEventAfterSuccessfulSettlement() {
+    UUID orderId = UUID.randomUUID();
+    UUID orderLineId = UUID.randomUUID();
+    UUID dishId = UUID.randomUUID();
+    UUID ingredientA = UUID.randomUUID();
+    SettleTriggerEvent event = event(orderId, orderLineId, 1);
+
+    stubLine(orderId, orderLineId, dishId, 1, List.of());
+    stubRecipe(RecipeTargetType.DISH, dishId, recipeLine(ingredientA, "4", "g"));
+    stubIngredient(ingredientA, "g");
+    InventoryStockBalanceEntity balanceA =
+        balance(ingredientA, "g", BigDecimal.valueOf(10), BigDecimal.valueOf(4));
+    when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
+        .thenReturn(Optional.of(balanceA));
+    heldReservation(orderId);
+    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(1L);
+
+    service.onSettleTrigger(event);
+
+    ArgumentCaptor<InventoryProcessedEventEntity> captor =
+        ArgumentCaptor.forClass(InventoryProcessedEventEntity.class);
+    verify(processedEventRepository).save(captor.capture());
+    InventoryProcessedEventEntity ledger = captor.getValue();
+    assertThat(ledger.getEventId()).isEqualTo(event.eventId());
+    assertThat(ledger.getConsumerName())
+        .isEqualTo(InventoryReservationSettlementService.CONSUMER_NAME);
+
+    InOrder inOrder = inOrder(lineSettlementRepository, processedEventRepository);
+    inOrder.verify(lineSettlementRepository).save(any());
+    inOrder.verify(processedEventRepository).save(any());
+  }
+
+  @Test
+  void finalLedgerInsertPropagatesToRollBackWholeSettlementTransaction() {
+    UUID orderId = UUID.randomUUID();
+    UUID orderLineId = UUID.randomUUID();
+    UUID dishId = UUID.randomUUID();
+    UUID ingredientA = UUID.randomUUID();
+
+    stubLine(orderId, orderLineId, dishId, 1, List.of());
+    stubRecipe(RecipeTargetType.DISH, dishId, recipeLine(ingredientA, "4", "g"));
+    stubIngredient(ingredientA, "g");
+    InventoryStockBalanceEntity balanceA =
+        balance(ingredientA, "g", BigDecimal.valueOf(10), BigDecimal.valueOf(4));
+    when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
+        .thenReturn(Optional.of(balanceA));
+    heldReservation(orderId);
+    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(1L);
+    when(processedEventRepository.save(any()))
+        .thenThrow(new DataIntegrityViolationException("duplicate ledger"));
+
+    assertThatThrownBy(() -> service.onSettleTrigger(event(orderId, orderLineId, 1)))
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  @Test
   void marksSettledOnlyWhenLastLineSettles() {
     UUID orderId = UUID.randomUUID();
     UUID lineOne = UUID.randomUUID();
@@ -234,7 +289,7 @@ class InventoryReservationSettlementServiceTest {
 
     service.onSettleTrigger(event);
 
-    verify(ledgerWriter, never()).tryInsert(any(), any());
+    verify(processedEventRepository, never()).save(any());
     verify(reservationRepository, never()).lockByOrderId(any());
     verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
     verify(movementRepository, never()).save(any());
@@ -249,7 +304,7 @@ class InventoryReservationSettlementServiceTest {
 
     service.onSettleTrigger(event(orderId, orderLineId, 1));
 
-    verify(ledgerWriter, never()).tryInsert(any(), any());
+    verify(processedEventRepository, never()).save(any());
     verify(reservationRepository, never()).lockByOrderId(any());
     verify(movementRepository, never()).save(any());
   }
