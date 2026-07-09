@@ -397,6 +397,16 @@ Plans:
 
 - [x] 17-06-PLAN.md — staff REST endpoints: PATCH advance + GET kitchen board under /admin/orders/** (D-05)
 
+### Phase 17.2: Outbox durability + messaging cleanup: resolve remaining non-blocking 17.1 review findings (WR-01 outbox wire-format round-trip + integration test, WR-02 relay per-row transaction, WR-03 delete dead publishers, IN-02 outbox retention + FAILED alerting, IN-03 unify reason-length constant, WR-05 explicit fulfillment rank map, WR-06 externalize DB credentials) (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 17
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 17.2 to break down)
+
 ### Phase 17.1: kitchen-hardening — Fix Phase 17 review findings: WR-01 add whenComplete callback + error logging to kitchen Kafka publishers so failed sends aren't silently lost; WR-02 persist actorId + timestamp on item advance for audit trail; WR-03 make KitchenStatusProjectionService fail-closed on unknown fulfillment rank; IN-01/02 use existsByOrderId to absorb same-order OrderConfirmed under new eventId instead of DLT (INSERTED)
 
 **Goal:** Close the outstanding robustness/quality debt from the Phase 15 and Phase 17 code reviews across the Kitchen and Inventory/Order bounded contexts — durable messaging (whenComplete + a full transactional outbox for the three saga events), advance audit trail, fail-closed status projection, REQUIRES_NEW ledger idempotency, rejection_reason overflow fix, and the global Jackson-3 serializer switch. No new features, no new dependencies; existing 156-test suite stays green.

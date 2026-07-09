@@ -2,23 +2,22 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 17.1
-status: ready_to_plan
-last_updated: 2026-07-09T08:27:09.244Z
+current_phase: 17.2
+status: planning
+last_updated: "2026-07-09T09:02:29.960Z"
 last_activity: 2026-07-09
 progress:
-  total_phases: 18
-  completed_phases: 16
+  total_phases: 19
+  completed_phases: 17
   total_plans: 38
   completed_plans: 38
   percent: 89
-stopped_at: Phase 17.1 complete (7/7) — ready to discuss Phase 999.1
 ---
 
 # State
 
 **Status:** Ready to plan
-**Current Phase:** 999.1
+**Current Phase:** 17.2
 **Plans:** Phases 01–16 complete (30 plans); Phase 17 not started
 **Last Activity:** 2026-07-09
 
@@ -65,6 +64,7 @@ stopped_at: Phase 17.1 complete (7/7) — ready to discuss Phase 999.1
 - Phase 16 added: kitchen "đang làm" (preparing) status + event; Inventory converts the held reservation into an actual stock deduction (reserved → on_hand) — the real consumption moment, split out from Phase 15.
 - Phase 16 RE-SCOPED (2026-07-07) for cleaner architecture: split into two boundaries. Phase 16 is now **inventory-reservation-settlement** — a pure Inventory settlement consumer (re-resolve line recipe → deduct reserved+on_hand, clamp≥0, CONSUMPTION audit movement, idempotent + DLT, WR-01/WR-02 fixes) reacting to a settle-trigger event. Phase 17 added: **kitchen-context** — a new bounded context (KitchenTicket aggregate, per-item preparing→ready→served→completed lifecycle, staff endpoint) that publishes the settle-trigger event and reflects fulfillment onto order status via event. The original Phase 16 plans/research/patterns were removed; Phase 16 CONTEXT rewritten and awaits re-plan.
 - Phase 17.1 inserted after Phase 17: kitchen-hardening: fix Phase 17 review findings WR-01/WR-02/WR-03/IN-01/02 (URGENT)
+- Phase 17.2 inserted after Phase 17: Outbox durability + messaging cleanup (remaining 17.1 review findings) (URGENT)
 
 ## Decisions
 
