@@ -1,6 +1,5 @@
 package com.example.feat1.DDD.kitchen_context.application;
 
-import com.example.feat1.DDD.kitchen_context.infrastructure.entity.KitchenProcessedEventEntity;
 import com.example.feat1.DDD.kitchen_context.infrastructure.entity.KitchenTicketEntity;
 import com.example.feat1.DDD.kitchen_context.infrastructure.entity.KitchenTicketItemEntity;
 import com.example.feat1.DDD.kitchen_context.infrastructure.entity.KitchenTicketItemToppingSnapshot;
@@ -11,7 +10,8 @@ import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent
 import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent.OrderConfirmedTopping;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,26 +29,36 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class KitchenTicketCreationService {
 
+  private static final Logger log = LoggerFactory.getLogger(KitchenTicketCreationService.class);
+
   /** Ledger consumer identity for the kitchen-side OrderConfirmed handler. */
   static final String CONSUMER_NAME = "kitchen-order-confirmed";
 
   private final KitchenProcessedEventRepository processedEventRepository;
   private final KitchenTicketRepository kitchenTicketRepository;
+  private final KitchenLedgerWriter ledgerWriter;
 
   @Transactional
   public void onOrderConfirmed(OrderConfirmedEvent event) {
-    // (1) Idempotency: fast pre-check, then insert + immediate flush as the authoritative guard.
+    // (1) Idempotency: fast pre-check, then delegate the authoritative insert to a REQUIRES_NEW
+    // writer (I-WR-01) so a concurrent-duplicate violation rolls back only the inner ledger
+    // transaction instead of poisoning this ticket-creation transaction.
     if (processedEventRepository.existsByEventIdAndConsumerName(event.eventId(), CONSUMER_NAME)) {
       return;
     }
-    try {
-      KitchenProcessedEventEntity ledger = new KitchenProcessedEventEntity();
-      ledger.setEventId(event.eventId());
-      ledger.setConsumerName(CONSUMER_NAME);
-      ledger.setProcessedAt(Instant.now());
-      processedEventRepository.saveAndFlush(ledger);
-    } catch (DataIntegrityViolationException duplicate) {
-      // Concurrent delivery inserted the same (eventId, consumer) first — treat as a replay.
+    if (!ledgerWriter.tryInsert(event.eventId(), CONSUMER_NAME)) {
+      return;
+    }
+
+    // (1b) Same-order dedup (K-IN-01/02): a re-emitted OrderConfirmed for the same order under a
+    // fresh eventId passes the ledger check above but must not attempt a second ticket — absorb it
+    // as a logged no-op instead of hitting the unique orderId constraint and landing on the DLT.
+    // The unique constraint remains as a concurrent-insert backstop.
+    if (kitchenTicketRepository.existsByOrderId(event.orderId())) {
+      log.info(
+          "Absorbing duplicate OrderConfirmed for orderId={} eventId={} — ticket already exists",
+          event.orderId(),
+          event.eventId());
       return;
     }
 

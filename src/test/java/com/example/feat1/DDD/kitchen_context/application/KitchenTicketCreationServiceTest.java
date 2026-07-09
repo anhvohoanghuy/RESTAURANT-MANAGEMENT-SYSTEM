@@ -22,12 +22,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.dao.DataIntegrityViolationException;
 
 class KitchenTicketCreationServiceTest {
 
   private KitchenProcessedEventRepository processedEventRepository;
   private KitchenTicketRepository kitchenTicketRepository;
+  private KitchenLedgerWriter ledgerWriter;
   private KitchenTicketCreationService service;
 
   private final UUID eventId = UUID.randomUUID();
@@ -41,12 +41,17 @@ class KitchenTicketCreationServiceTest {
   void setUp() {
     processedEventRepository = mock(KitchenProcessedEventRepository.class);
     kitchenTicketRepository = mock(KitchenTicketRepository.class);
-    service = new KitchenTicketCreationService(processedEventRepository, kitchenTicketRepository);
+    ledgerWriter = mock(KitchenLedgerWriter.class);
+    service =
+        new KitchenTicketCreationService(
+            processedEventRepository, kitchenTicketRepository, ledgerWriter);
   }
 
   @Test
   void firstDeliveryCreatesOneTicketWithAllManifestItems() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
+    when(kitchenTicketRepository.existsByOrderId(any())).thenReturn(false);
 
     service.onOrderConfirmed(confirmedEvent());
 
@@ -81,6 +86,7 @@ class KitchenTicketCreationServiceTest {
             eventId, "kitchen-order-confirmed"))
         .thenReturn(false)
         .thenReturn(true);
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
 
     service.onOrderConfirmed(confirmedEvent());
     service.onOrderConfirmed(confirmedEvent());
@@ -91,12 +97,33 @@ class KitchenTicketCreationServiceTest {
   @Test
   void concurrentDuplicateLedgerInsertIsSwallowedAndCreatesNoTicket() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(processedEventRepository.saveAndFlush(any()))
-        .thenThrow(new DataIntegrityViolationException("duplicate"));
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(false);
 
     service.onOrderConfirmed(confirmedEvent());
 
     verify(kitchenTicketRepository, never()).save(any());
+  }
+
+  @Test
+  void sameOrderDuplicateUnderNewEventIdIsAbsorbedWithoutSavingOrThrowing() {
+    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
+    when(kitchenTicketRepository.existsByOrderId(orderId)).thenReturn(true);
+
+    service.onOrderConfirmed(confirmedEvent());
+
+    verify(kitchenTicketRepository, never()).save(any());
+  }
+
+  @Test
+  void newOrderIdWithNoExistingTicketBuildsAndSavesExactlyOnce() {
+    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
+    when(kitchenTicketRepository.existsByOrderId(orderId)).thenReturn(false);
+
+    service.onOrderConfirmed(confirmedEvent());
+
+    verify(kitchenTicketRepository, times(1)).save(any());
   }
 
   private OrderConfirmedEvent confirmedEvent() {
