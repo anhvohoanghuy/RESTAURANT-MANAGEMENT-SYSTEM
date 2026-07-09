@@ -2,23 +2,22 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 17
-status: ready_to_plan
-last_updated: 2026-07-08T08:49:55.979Z
+current_phase: 17.1
+status: planning
+last_updated: "2026-07-09T02:24:01.233Z"
 last_activity: 2026-07-08
 progress:
-  total_phases: 17
-  completed_phases: 15
+  total_phases: 18
+  completed_phases: 16
   total_plans: 31
   completed_plans: 31
-  percent: 88
-stopped_at: Phase 17 complete (7/7) — ready to discuss Phase 999.1
+  percent: 89
 ---
 
 # State
 
 **Status:** Ready to plan
-**Current Phase:** 999.1
+**Current Phase:** 17.1
 **Plans:** Phases 01–16 complete (30 plans); Phase 17 not started
 **Last Activity:** 2026-07-08
 
@@ -64,3 +63,9 @@ stopped_at: Phase 17 complete (7/7) — ready to discuss Phase 999.1
 - Phase 15 added and discussed (revised): reshaped from fire-and-forget deduction into an order-confirmation saga — order created in PENDING_CONFIRMATION, Inventory consumes OrderCreated, checks availability (on_hand − reserved) and reserves stock (never negative) or rejects, then publishes a result event Order Context consumes to reach CONFIRMED/REJECTED. Idempotent (processed-events ledger by eventId) with DefaultErrorHandler + DLT. Payments consumer dropped from scope.
 - Phase 16 added: kitchen "đang làm" (preparing) status + event; Inventory converts the held reservation into an actual stock deduction (reserved → on_hand) — the real consumption moment, split out from Phase 15.
 - Phase 16 RE-SCOPED (2026-07-07) for cleaner architecture: split into two boundaries. Phase 16 is now **inventory-reservation-settlement** — a pure Inventory settlement consumer (re-resolve line recipe → deduct reserved+on_hand, clamp≥0, CONSUMPTION audit movement, idempotent + DLT, WR-01/WR-02 fixes) reacting to a settle-trigger event. Phase 17 added: **kitchen-context** — a new bounded context (KitchenTicket aggregate, per-item preparing→ready→served→completed lifecycle, staff endpoint) that publishes the settle-trigger event and reflects fulfillment onto order status via event. The original Phase 16 plans/research/patterns were removed; Phase 16 CONTEXT rewritten and awaits re-plan.
+- Phase 17.1 inserted after Phase 17: kitchen-hardening: fix Phase 17 review findings WR-01/WR-02/WR-03/IN-01/02 (URGENT)
+
+## Decisions
+
+- [Phase 17.1]: Kitchen-hardening phase (17.1) scoped from Phase 17 review findings — discussed 2026-07-09, all fix-now: (WR-01) add whenComplete() callback + error logging to KafkaKitchenSettleTriggerPublisher and KafkaKitchenTicketStatusChangedPublisher so failed sends are no longer silently lost; (WR-02) persist actorId + timestamp on kitchen item advance to create an audit trail of who advanced each item; (WR-03) make KitchenStatusProjectionService fail-closed — unknown fulfillment rank logs and skips instead of getOrDefault(-1) fail-open; (IN-01/02) use existsByOrderId in KitchenTicketCreationService to absorb same-order OrderConfirmed under a new eventId instead of throwing to DLT. Inventory-side WR-01..05 remain separately deferred.
+- [Phase 17.1]: Phase 17.1 scope EXPANDED (2026-07-09) to cover both Kitchen and Inventory/Order review debt. Inventory decisions (fix-now): (I-WR-01) replace inline saveAndFlush+catch idempotency idiom in InventoryReservationService and OrderConfirmationService with the REQUIRES_NEW ledger-writer pattern already introduced in Phase 16; (I-WR-02) implement a full transactional outbox — persist saga events (OrderCreated, StockReservationResult, OrderConfirmed) to an outbox table in the same DB transaction + a relay poller publishing to Kafka, so a crash between commit and Kafka send no longer strands orders in PENDING_CONFIRMATION; (I-WR-03) add whenComplete callback + error logging to KafkaInventoryStockResultPublisher and KafkaOrderEventPublisher; (I-WR-04) make rejection_reason a TEXT column and truncate describe() output to avoid overflow; (I-WR-05) switch the global producer value-serializer in application.properties from Jackson-2 JsonSerializer to Jackson-3 and re-run the full Maven suite to catch Payment/Table regressions. Combined with the 4 Kitchen fixes already decided.
