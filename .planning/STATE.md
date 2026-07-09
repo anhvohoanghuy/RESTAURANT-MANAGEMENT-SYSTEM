@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 17.3
-status: executing
-last_updated: "2026-07-09T14:07:23.229Z"
+current_phase: 999.1
+status: ready_to_plan
+last_updated: 2026-07-09T14:07:37.508Z
 last_activity: 2026-07-09
 progress:
   total_phases: 20
@@ -12,13 +12,14 @@ progress:
   total_plans: 40
   completed_plans: 40
   percent: 95
+stopped_at: Phase 17.3 complete (1/1) — ready to discuss Phase 999.1
 ---
 
 # State
 
-**Status:** Executing Phase 17.3
-**Current Phase:** 17.3
-**Plans:** Phase 17.3 planned (1 plan) -- ready to execute
+**Status:** Ready to plan
+**Current Phase:** 999.1
+**Plans:** Phase 999.1 ready to discuss/plan
 **Last Activity:** 2026-07-09
 
 ## Notes
@@ -45,6 +46,7 @@ progress:
 - Phase 16 IMPLEMENTED (2026-07-08) after re-scope to pure inventory settlement (5 plans, 3 waves): a settle-trigger Kafka consumer that re-resolves each order line's recipe via a shared RecipeRequirementResolver (extracted from InventoryReservationService) + a new cross-context OrderLineLookupPort, locks the reservation row before ascending-ingredientId balance rows, decrements reserved+on_hand with a non-negative clamp (never throws), writes a CONSUMPTION movement directly (WR-02), and marks the reservation SETTLED when the last line settles. Dual idempotency (eventId ledger + per-(orderId,orderLineId) guard) with the WR-01 REQUIRES_NEW ledger writer; missing reservation → DLT. Jackson-3 native serde, no new deps. Verification PASS 9/9; full Maven suite 156 tests green. Producer of the settle-trigger is Phase 17 (kitchen-context).
 
 - Phase 17.2 COMPLETED (2026-07-09): removed the Phase 16 settlement REQUIRES_NEW ledger pre-commit anti-pattern by writing the processed-event row last in the same InventoryReservationSettlementService transaction; deleted InventoryLedgerWriter and its obsolete test. Verification PASS 9/9; focused settlement tests and full Maven suite (207 tests) passed.
+- Phase 17.3 COMPLETED (2026-07-09): aligned Payment/Table dedicated Kafka producer factories with Jackson-3 `JacksonJsonSerializer` and added broker-free config + Instant serde round-trip guards. Verification PASS 7/7; focused tests and full Maven suite (213 tests) passed.
 
 ## Accumulated Context
 
