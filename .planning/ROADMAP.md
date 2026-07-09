@@ -426,3 +426,13 @@ Plans:
 
 Plans:
 - [x] 17.2-01-PLAN.md — Move settlement processed-event ledger insert to final same-transaction step and delete obsolete `InventoryLedgerWriter`
+
+### Phase 17.3: payment-table-kafka-jackson3-serializer-hardening - Fix Payment/Table Kafka producer configs still using legacy JsonSerializer after global Jackson-3 switch (INSERTED)
+
+**Goal:** Close the latent runtime risk where dedicated Payment/Table Kafka producer factories still override the global Jackson-3 producer serializer with legacy `JsonSerializer`, which can fail for event payloads containing `Instant`.
+**Requirements**: [D-01, D-02, D-03, D-04, D-05, D-06, D-07]
+**Depends on:** Phase 17.2
+**Plans:** 1/1 planned
+
+Plans:
+- [ ] 17.3-01-PLAN.md - Align Payment/Table dedicated Kafka producers with Jackson-3 and add Instant serde/config regression guards
