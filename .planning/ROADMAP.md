@@ -396,3 +396,23 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 17-06-PLAN.md — staff REST endpoints: PATCH advance + GET kitchen board under /admin/orders/** (D-05)
+
+### Phase 17.1: kitchen-hardening — Fix Phase 17 review findings: WR-01 add whenComplete callback + error logging to kitchen Kafka publishers so failed sends aren't silently lost; WR-02 persist actorId + timestamp on item advance for audit trail; WR-03 make KitchenStatusProjectionService fail-closed on unknown fulfillment rank; IN-01/02 use existsByOrderId to absorb same-order OrderConfirmed under new eventId instead of DLT (INSERTED)
+
+**Goal:** Close the outstanding robustness/quality debt from the Phase 15 and Phase 17 code reviews across the Kitchen and Inventory/Order bounded contexts — durable messaging (whenComplete + a full transactional outbox for the three saga events), advance audit trail, fail-closed status projection, REQUIRES_NEW ledger idempotency, rejection_reason overflow fix, and the global Jackson-3 serializer switch. No new features, no new dependencies; existing 156-test suite stays green.
+**Requirements**: [K-WR-01, K-WR-02, K-WR-03, K-IN-01, K-IN-02, I-WR-01, I-WR-02, I-WR-03, I-WR-04, I-WR-05]
+**Depends on:** Phase 17
+**Plans:** 7 plans
+
+Plans:
+
+**Wave 1**
+- [ ] 17.1-01-PLAN.md — whenComplete send-failure logging on all four kitchen/saga Kafka publishers (K-WR-01, I-WR-03)
+- [ ] 17.1-02-PLAN.md — kitchen advance audit + same-order dedup + REQUIRES_NEW kitchen ledger writer (K-WR-02, K-IN-01/02, I-WR-01)
+- [ ] 17.1-03-PLAN.md — order projection fail-closed rank guard + REQUIRES_NEW OrderLedgerWriter (K-WR-03, I-WR-01)
+- [ ] 17.1-04-PLAN.md — global Jackson-3 value-serializer switch + full-suite regression (I-WR-05)
+- [ ] 17.1-05-PLAN.md — transactional outbox foundation: entity, SKIP LOCKED repo, in-tx writer, scheduled relay + crash-recovery test (I-WR-02)
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 17.1-06-PLAN.md — order-side saga outbox cutover + OrderLedgerWriter adoption + rejection_reason TEXT/truncation (I-WR-02, I-WR-01, I-WR-04)
+- [ ] 17.1-07-PLAN.md — inventory-side saga outbox cutover + InventoryLedgerWriter adoption (I-WR-02, I-WR-01)
