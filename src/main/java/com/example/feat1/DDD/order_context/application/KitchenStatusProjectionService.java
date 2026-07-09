@@ -5,15 +5,14 @@ import com.example.feat1.DDD.kitchen_context.application.event.KitchenTicketStat
 import com.example.feat1.DDD.kitchen_context.domain.model.KitchenItemStatus;
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderEntity;
-import com.example.feat1.DDD.order_context.infrastructure.entity.OrderProcessedEventEntity;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProcessedEventRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class KitchenStatusProjectionService {
 
+  private static final Logger log = LoggerFactory.getLogger(KitchenStatusProjectionService.class);
+
   /** Ledger consumer identity for the order-side kitchen-status projection. */
   static final String CONSUMER_NAME = "kitchen-status-projection";
 
@@ -55,21 +56,17 @@ public class KitchenStatusProjectionService {
 
   private final OrderProcessedEventRepository processedEventRepository;
   private final OrderRepository orderRepository;
+  private final OrderLedgerWriter ledgerWriter;
 
   @Transactional
   public void onTicketStatusChanged(KitchenTicketStatusChangedEvent event) {
-    // (1) Idempotency: fast pre-check, then insert + immediate flush as the authoritative guard.
+    // (1) Idempotency: fast pre-check, then delegate the insert+flush to a REQUIRES_NEW ledger
+    // writer (I-WR-01) so a concurrent-duplicate violation rolls back only its own inner
+    // transaction instead of marking this business transaction rollback-only.
     if (processedEventRepository.existsByEventIdAndConsumerName(event.eventId(), CONSUMER_NAME)) {
       return;
     }
-    try {
-      OrderProcessedEventEntity ledger = new OrderProcessedEventEntity();
-      ledger.setEventId(event.eventId());
-      ledger.setConsumerName(CONSUMER_NAME);
-      ledger.setProcessedAt(Instant.now());
-      processedEventRepository.saveAndFlush(ledger);
-    } catch (DataIntegrityViolationException duplicate) {
-      // Concurrent delivery inserted the same (eventId, consumer) first -- treat as a replay.
+    if (!ledgerWriter.tryInsert(event.eventId(), CONSUMER_NAME)) {
       return;
     }
 
@@ -92,8 +89,20 @@ public class KitchenStatusProjectionService {
     }
 
     // (5) Rank guard: only apply if the derived status strictly advances the order (T-17-17).
+    // Fail-closed (K-WR-03): an unknown CURRENT rank (e.g. order is still
+    // PENDING_CONFIRMATION/SUBMITTED, pre-CONFIRMED) must never be overwritten by a fulfillment
+    // snapshot -- getOrDefault(-1) on ONLY the target used to fail-open here and let any
+    // fulfillment status skip past CONFIRMED.
     int targetRank = FULFILLMENT_RANK.getOrDefault(target, -1);
     int currentRank = FULFILLMENT_RANK.getOrDefault(order.getStatus(), -1);
+    if (currentRank < 0) {
+      log.warn(
+          "Unknown fulfillment rank for order {} status {} -- skipping projection to {}",
+          order.getId(),
+          order.getStatus(),
+          target);
+      return;
+    }
     if (targetRank <= currentRank) {
       return;
     }
