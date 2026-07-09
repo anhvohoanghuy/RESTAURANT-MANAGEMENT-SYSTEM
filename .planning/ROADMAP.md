@@ -422,7 +422,7 @@ Plans:
 **Goal:** Fix the remaining Phase 16 settlement idempotency anti-pattern by removing the pre-committed `REQUIRES_NEW` inventory ledger writer from `InventoryReservationSettlementService` and recording the processed-event row last, in the same transaction as the settlement mutation.
 **Requirements**: [D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09]
 **Depends on:** Phase 17.1
-**Plans:** 1/1 planned
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 17.2-01-PLAN.md — Move settlement processed-event ledger insert to final same-transaction step and delete obsolete `InventoryLedgerWriter`
+- [x] 17.2-01-PLAN.md — Move settlement processed-event ledger insert to final same-transaction step and delete obsolete `InventoryLedgerWriter`

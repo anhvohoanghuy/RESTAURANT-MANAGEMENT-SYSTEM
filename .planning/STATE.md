@@ -2,23 +2,24 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 17.2
-status: executing
-last_updated: "2026-07-09T13:39:59.715Z"
+current_phase: 999.1
+status: ready_to_plan
+last_updated: 2026-07-09T13:52:21.811Z
 last_activity: 2026-07-09
 progress:
   total_phases: 19
-  completed_phases: 17
+  completed_phases: 18
   total_plans: 39
-  completed_plans: 38
-  percent: 89
+  completed_plans: 39
+  percent: 95
+stopped_at: Phase 17.2 complete (1/1) — ready to discuss Phase 999.1
 ---
 
 # State
 
-**Status:** Ready to execute
-**Current Phase:** 17.2
-**Plans:** Phase 17.2 planned (1 plan) -- ready to execute
+**Status:** Ready to plan
+**Current Phase:** 999.1
+**Plans:** Phase 999.1 ready to discuss/plan
 **Last Activity:** 2026-07-09
 
 ## Notes
@@ -43,6 +44,8 @@ progress:
 - Phase 15 implemented the Kafka order-confirmation saga (6 plans, 3 waves): order created in PENDING_CONFIRMATION, Inventory reserves stock under pessimistic lock (available = on_hand − reserved, never negative) or rejects, publishes a result event Order Context consumes to reach CONFIRMED/REJECTED. Idempotent processed-events ledgers, DefaultErrorHandler + DLT, Jackson-3-native serde (no new deps). Verification PASS 19/19; full Maven suite (138 tests) passed 2026-07-07. Code review: 0 critical, 5 warning (WR-01..05), 5 info — logged for follow-up.
 - Phase 16 context gathered (2026-07-07): order-item-level preparing status + staff trigger; Inventory settles the held reservation into an actual deduction by re-resolving each line's recipe at prepare time; idempotent + clamp≥0 + DLT; new consumer applies the Phase 15 WR-01/WR-02 fixes.
 - Phase 16 IMPLEMENTED (2026-07-08) after re-scope to pure inventory settlement (5 plans, 3 waves): a settle-trigger Kafka consumer that re-resolves each order line's recipe via a shared RecipeRequirementResolver (extracted from InventoryReservationService) + a new cross-context OrderLineLookupPort, locks the reservation row before ascending-ingredientId balance rows, decrements reserved+on_hand with a non-negative clamp (never throws), writes a CONSUMPTION movement directly (WR-02), and marks the reservation SETTLED when the last line settles. Dual idempotency (eventId ledger + per-(orderId,orderLineId) guard) with the WR-01 REQUIRES_NEW ledger writer; missing reservation → DLT. Jackson-3 native serde, no new deps. Verification PASS 9/9; full Maven suite 156 tests green. Producer of the settle-trigger is Phase 17 (kitchen-context).
+
+- Phase 17.2 COMPLETED (2026-07-09): removed the Phase 16 settlement REQUIRES_NEW ledger pre-commit anti-pattern by writing the processed-event row last in the same InventoryReservationSettlementService transaction; deleted InventoryLedgerWriter and its obsolete test. Verification PASS 9/9; focused settlement tests and full Maven suite (207 tests) passed.
 
 ## Accumulated Context
 
