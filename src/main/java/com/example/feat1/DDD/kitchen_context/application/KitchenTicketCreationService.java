@@ -10,6 +10,8 @@ import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent
 import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent.OrderConfirmedTopping;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class KitchenTicketCreationService {
 
+  private static final Logger log = LoggerFactory.getLogger(KitchenTicketCreationService.class);
+
   /** Ledger consumer identity for the kitchen-side OrderConfirmed handler. */
   static final String CONSUMER_NAME = "kitchen-order-confirmed";
 
@@ -43,6 +47,18 @@ public class KitchenTicketCreationService {
       return;
     }
     if (!ledgerWriter.tryInsert(event.eventId(), CONSUMER_NAME)) {
+      return;
+    }
+
+    // (1b) Same-order dedup (K-IN-01/02): a re-emitted OrderConfirmed for the same order under a
+    // fresh eventId passes the ledger check above but must not attempt a second ticket — absorb it
+    // as a logged no-op instead of hitting the unique orderId constraint and landing on the DLT.
+    // The unique constraint remains as a concurrent-insert backstop.
+    if (kitchenTicketRepository.existsByOrderId(event.orderId())) {
+      log.info(
+          "Absorbing duplicate OrderConfirmed for orderId={} eventId={} — ticket already exists",
+          event.orderId(),
+          event.eventId());
       return;
     }
 
