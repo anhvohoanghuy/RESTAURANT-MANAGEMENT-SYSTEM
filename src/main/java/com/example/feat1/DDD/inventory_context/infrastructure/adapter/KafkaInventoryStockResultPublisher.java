@@ -3,6 +3,8 @@ package com.example.feat1.DDD.inventory_context.infrastructure.adapter;
 import com.example.feat1.DDD.inventory_context.domain.port.InventoryStockResultPublisher;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,9 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class KafkaInventoryStockResultPublisher implements InventoryStockResultPublisher {
+  private static final Logger log =
+      LoggerFactory.getLogger(KafkaInventoryStockResultPublisher.class);
+
   private final KafkaTemplate<String, OrderStockResultEvent> orderStockResultKafkaTemplate;
 
   @Value("${inventory.events.order-stock-results-topic:inventory.order-stock-results}")
@@ -27,6 +32,14 @@ public class KafkaInventoryStockResultPublisher implements InventoryStockResultP
 
   @Override
   public void publishStockResult(OrderStockResultEvent event) {
-    orderStockResultKafkaTemplate.send(topic, event.orderId().toString(), event);
+    orderStockResultKafkaTemplate
+        .send(topic, event.orderId().toString(), event)
+        .whenComplete(
+            (result, ex) -> {
+              if (ex != null) {
+                log.error(
+                    "Stock result publish FAILED topic={} order={}", topic, event.orderId(), ex);
+              }
+            });
   }
 }
