@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.feat1.DDD.inventory_context.domain.model.IngredientStatus;
-import com.example.feat1.DDD.inventory_context.domain.port.InventoryStockResultPublisher;
 import com.example.feat1.DDD.inventory_context.domain.port.MenuRecipeCostingPort;
 import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementResolver;
 import com.example.feat1.DDD.inventory_context.domain.snapshot.RecipeCostingSnapshot;
@@ -25,6 +24,7 @@ import com.example.feat1.DDD.menu_context.domain.model.RecipeTargetType;
 import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Result;
+import com.example.feat1.DDD.shared.outbox.application.OutboxWriter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -34,16 +34,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class InventoryReservationServiceTest {
   private static final String DEFAULT = InventoryStockBalanceEntity.DEFAULT_LOCATION;
+  private static final String ORDER_STOCK_RESULTS_TOPIC = "inventory.order-stock-results";
 
   private InventoryProcessedEventRepository processedEventRepository;
   private StockReservationRepository reservationRepository;
   private InventoryStockBalanceRepository balanceRepository;
   private IngredientRepository ingredientRepository;
   private MenuRecipeCostingPort menuRecipeCostingPort;
-  private InventoryStockResultPublisher stockResultPublisher;
+  private InventoryLedgerWriter ledgerWriter;
+  private OutboxWriter outboxWriter;
   private InventoryReservationService service;
 
   @BeforeEach
@@ -53,7 +56,8 @@ class InventoryReservationServiceTest {
     balanceRepository = mock(InventoryStockBalanceRepository.class);
     ingredientRepository = mock(IngredientRepository.class);
     menuRecipeCostingPort = mock(MenuRecipeCostingPort.class);
-    stockResultPublisher = mock(InventoryStockResultPublisher.class);
+    ledgerWriter = mock(InventoryLedgerWriter.class);
+    outboxWriter = mock(OutboxWriter.class);
     // Real resolver wired with the existing mocks so recipe-resolution behavior is exercised
     // end-to-end through the extracted shared collaborator (D-02, behavior-preserving refactor).
     RecipeRequirementResolver recipeRequirementResolver =
@@ -65,11 +69,14 @@ class InventoryReservationServiceTest {
             balanceRepository,
             ingredientRepository,
             recipeRequirementResolver,
-            stockResultPublisher);
-    // Defaults: not yet processed, no reservation, saves echo their argument.
+            ledgerWriter,
+            outboxWriter);
+    // @Value field is set by Spring at runtime; mirror it here (matches PaymentServiceTest idiom).
+    ReflectionTestUtils.setField(service, "orderStockResultsTopic", ORDER_STOCK_RESULTS_TOPIC);
+    // Defaults: not yet processed, no reservation, ledger insert succeeds, saves echo their arg.
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
     when(reservationRepository.existsByOrderId(any())).thenReturn(false);
-    when(processedEventRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
     when(balanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(reservationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
   }
@@ -99,7 +106,7 @@ class InventoryReservationServiceTest {
     assertThat(reservationCaptor.getValue().getOrderId()).isEqualTo(event.orderId());
     assertThat(reservationCaptor.getValue().getLines()).hasSize(1);
 
-    OrderStockResultEvent result = capturePublished();
+    OrderStockResultEvent result = capturePublished(event.orderId());
     assertThat(result.result()).isEqualTo(Result.CONFIRMED);
     assertThat(result.eventType()).isEqualTo(OrderStockResultEvent.CONFIRMED_TYPE);
     assertThat(result.orderId()).isEqualTo(event.orderId());
@@ -137,7 +144,7 @@ class InventoryReservationServiceTest {
     assertThat(balanceA.getReservedQuantity()).isEqualByComparingTo("2");
     assertThat(balanceB.getReservedQuantity()).isEqualByComparingTo("0");
 
-    OrderStockResultEvent result = capturePublished();
+    OrderStockResultEvent result = capturePublished(event.orderId());
     assertThat(result.result()).isEqualTo(Result.REJECTED);
     assertThat(result.eventType()).isEqualTo(OrderStockResultEvent.REJECTED_TYPE);
     assertThat(result.shortfalls()).hasSize(1);
@@ -190,7 +197,7 @@ class InventoryReservationServiceTest {
 
     assertThat(balanceA.getReservedQuantity()).isEqualByComparingTo("6"); // 3 x 2
     assertThat(balanceB.getReservedQuantity()).isEqualByComparingTo("4"); // 2 x 2
-    OrderStockResultEvent result = capturePublished();
+    OrderStockResultEvent result = capturePublished(event.orderId());
     assertThat(result.result()).isEqualTo(Result.CONFIRMED);
     assertThat(result.shortfalls()).isEmpty();
   }
@@ -205,10 +212,10 @@ class InventoryReservationServiceTest {
 
     service.onOrderCreated(event);
 
-    verify(processedEventRepository, never()).saveAndFlush(any());
+    verify(ledgerWriter, never()).tryInsert(any(), any());
     verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
     verify(reservationRepository, never()).save(any());
-    verify(stockResultPublisher, never()).publishStockResult(any());
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -219,10 +226,24 @@ class InventoryReservationServiceTest {
 
     service.onOrderCreated(event);
 
-    verify(processedEventRepository, never()).saveAndFlush(any());
+    verify(ledgerWriter, never()).tryInsert(any(), any());
     verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
     verify(reservationRepository, never()).save(any());
-    verify(stockResultPublisher, never()).publishStockResult(any());
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void concurrentDuplicateLedgerInsertIsSkippedWithoutPoisoningTransaction() {
+    UUID dishId = UUID.randomUUID();
+    OrderCreatedEvent event = event(line(dishId, 1));
+    when(ledgerWriter.tryInsert(event.eventId(), InventoryReservationService.CONSUMER_NAME))
+        .thenReturn(false);
+
+    service.onOrderCreated(event);
+
+    verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
+    verify(reservationRepository, never()).save(any());
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -252,11 +273,28 @@ class InventoryReservationServiceTest {
 
   // ---- fixtures -------------------------------------------------------------
 
-  private OrderStockResultEvent capturePublished() {
-    ArgumentCaptor<OrderStockResultEvent> captor =
-        ArgumentCaptor.forClass(OrderStockResultEvent.class);
-    verify(stockResultPublisher).publishStockResult(captor.capture());
-    return captor.getValue();
+  private OrderStockResultEvent capturePublished(UUID orderId) {
+    ArgumentCaptor<String> aggregateTypeCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<UUID> aggregateIdCaptor = ArgumentCaptor.forClass(UUID.class);
+    ArgumentCaptor<String> eventTypeCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> msgKeyCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(outboxWriter)
+        .save(
+            aggregateTypeCaptor.capture(),
+            aggregateIdCaptor.capture(),
+            eventTypeCaptor.capture(),
+            topicCaptor.capture(),
+            msgKeyCaptor.capture(),
+            eventCaptor.capture());
+    assertThat(aggregateTypeCaptor.getValue()).isEqualTo("INVENTORY");
+    assertThat(aggregateIdCaptor.getValue()).isEqualTo(orderId);
+    assertThat(topicCaptor.getValue()).isEqualTo(ORDER_STOCK_RESULTS_TOPIC);
+    assertThat(msgKeyCaptor.getValue()).isEqualTo(orderId.toString());
+    OrderStockResultEvent event = (OrderStockResultEvent) eventCaptor.getValue();
+    assertThat(eventTypeCaptor.getValue()).isEqualTo(event.eventType());
+    return event;
   }
 
   private void stubRecipe(

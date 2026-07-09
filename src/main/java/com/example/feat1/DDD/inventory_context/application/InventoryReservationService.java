@@ -1,9 +1,7 @@
 package com.example.feat1.DDD.inventory_context.application;
 
-import com.example.feat1.DDD.inventory_context.domain.port.InventoryStockResultPublisher;
 import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementResolver;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientEntity;
-import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryProcessedEventEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockBalanceEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.IngredientRepository;
@@ -15,6 +13,7 @@ import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Result;
 import com.example.feat1.DDD.order_context.application.event.OrderStockResultEvent.Shortfall;
+import com.example.feat1.DDD.shared.outbox.application.OutboxWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -27,11 +26,9 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Core reservation saga handler for the order-confirmation flow (D-02/D-03/D-06/D-09/D-10/D-11).
@@ -41,8 +38,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * reusing the shared costing recipe-resolution path with base-unit conversion; (3) checks {@code
  * available = onHand - reserved} on {@code PESSIMISTIC_WRITE}-locked rows acquired in canonical
  * sorted-ingredientId order (deadlock avoidance); (4) reserves atomically only when every
- * ingredient is sufficient, otherwise rejects with shortfalls; and (5) publishes the {@link
- * OrderStockResultEvent} only after the transaction commits.
+ * ingredient is sufficient, otherwise rejects with shortfalls; and (5) writes the {@link
+ * OrderStockResultEvent} to the transactional outbox in the same transaction (I-WR-02) — the outbox
+ * relay publishes it, closing the crash-between-commit-and-send gap the prior afterCommit publish
+ * left open.
  *
  * <p>The Kafka listener (15-04) is a thin delegate to {@link #onOrderCreated(OrderCreatedEvent)};
  * all business logic lives here.
@@ -63,7 +62,11 @@ public class InventoryReservationService {
   private final InventoryStockBalanceRepository balanceRepository;
   private final IngredientRepository ingredientRepository;
   private final RecipeRequirementResolver recipeRequirementResolver;
-  private final InventoryStockResultPublisher stockResultPublisher;
+  private final InventoryLedgerWriter ledgerWriter;
+  private final OutboxWriter outboxWriter;
+
+  @Value("${inventory.events.order-stock-results-topic:inventory.order-stock-results}")
+  private String orderStockResultsTopic;
 
   @Transactional
   public void onOrderCreated(OrderCreatedEvent event) {
@@ -77,15 +80,11 @@ public class InventoryReservationService {
       log.debug("Skipping already-processed OrderCreated eventId={} orderId={}", eventId, orderId);
       return;
     }
-    try {
-      InventoryProcessedEventEntity ledger = new InventoryProcessedEventEntity();
-      ledger.setEventId(eventId);
-      ledger.setConsumerName(CONSUMER_NAME);
-      ledger.setProcessedAt(Instant.now());
-      // saveAndFlush forces the INSERT now (the @Id is GenerationType.UUID and would otherwise not
-      // flush until commit), so a concurrent-duplicate violation surfaces inside this try block.
-      processedEventRepository.saveAndFlush(ledger);
-    } catch (DataIntegrityViolationException duplicate) {
+    // Insert the ledger row in its OWN REQUIRES_NEW transaction (WR-01) so a concurrent-duplicate
+    // constraint violation rolls back only the inner transaction — it never poisons this
+    // reservation
+    // transaction.
+    if (!ledgerWriter.tryInsert(eventId, CONSUMER_NAME)) {
       log.debug(
           "Concurrent duplicate OrderCreated eventId={} orderId={} — skipping", eventId, orderId);
       return;
@@ -148,8 +147,16 @@ public class InventoryReservationService {
               List.copyOf(shortfalls));
     }
 
-    // (5) Publish only after the reservation transaction commits (D-10 / T-15-04).
-    publishAfterCommit(result);
+    // (5) Write the result to the outbox in this same transaction (I-WR-02) — the relay (plan
+    // 05) publishes it, closing the dual-write gap a crash between commit and afterCommit-send
+    // used to leave (D-10 / T-17.1-19).
+    outboxWriter.save(
+        "INVENTORY",
+        orderId,
+        result.eventType(),
+        orderStockResultsTopic,
+        orderId.toString(),
+        result);
   }
 
   /**
@@ -183,20 +190,6 @@ public class InventoryReservationService {
       return balance.getIngredient().getName();
     }
     return ingredientRepository.findById(ingredientId).map(IngredientEntity::getName).orElse(null);
-  }
-
-  private void publishAfterCommit(OrderStockResultEvent event) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      stockResultPublisher.publishStockResult(event);
-      return;
-    }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            stockResultPublisher.publishStockResult(event);
-          }
-        });
   }
 
   private BigDecimal scale(BigDecimal value) {
