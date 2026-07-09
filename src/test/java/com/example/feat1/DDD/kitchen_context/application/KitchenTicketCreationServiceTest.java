@@ -51,6 +51,7 @@ class KitchenTicketCreationServiceTest {
   void firstDeliveryCreatesOneTicketWithAllManifestItems() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
     when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
+    when(kitchenTicketRepository.existsByOrderId(any())).thenReturn(false);
 
     service.onOrderConfirmed(confirmedEvent());
 
@@ -101,6 +102,28 @@ class KitchenTicketCreationServiceTest {
     service.onOrderConfirmed(confirmedEvent());
 
     verify(kitchenTicketRepository, never()).save(any());
+  }
+
+  @Test
+  void sameOrderDuplicateUnderNewEventIdIsAbsorbedWithoutSavingOrThrowing() {
+    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
+    when(kitchenTicketRepository.existsByOrderId(orderId)).thenReturn(true);
+
+    service.onOrderConfirmed(confirmedEvent());
+
+    verify(kitchenTicketRepository, never()).save(any());
+  }
+
+  @Test
+  void newOrderIdWithNoExistingTicketBuildsAndSavesExactlyOnce() {
+    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
+    when(kitchenTicketRepository.existsByOrderId(orderId)).thenReturn(false);
+
+    service.onOrderConfirmed(confirmedEvent());
+
+    verify(kitchenTicketRepository, times(1)).save(any());
   }
 
   private OrderConfirmedEvent confirmedEvent() {
