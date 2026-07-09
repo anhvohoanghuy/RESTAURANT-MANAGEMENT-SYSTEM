@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class KitchenStatusProjectionService {
+
+  private static final Logger log = LoggerFactory.getLogger(KitchenStatusProjectionService.class);
 
   /** Ledger consumer identity for the order-side kitchen-status projection. */
   static final String CONSUMER_NAME = "kitchen-status-projection";
@@ -85,8 +89,20 @@ public class KitchenStatusProjectionService {
     }
 
     // (5) Rank guard: only apply if the derived status strictly advances the order (T-17-17).
+    // Fail-closed (K-WR-03): an unknown CURRENT rank (e.g. order is still
+    // PENDING_CONFIRMATION/SUBMITTED, pre-CONFIRMED) must never be overwritten by a fulfillment
+    // snapshot -- getOrDefault(-1) on ONLY the target used to fail-open here and let any
+    // fulfillment status skip past CONFIRMED.
     int targetRank = FULFILLMENT_RANK.getOrDefault(target, -1);
     int currentRank = FULFILLMENT_RANK.getOrDefault(order.getStatus(), -1);
+    if (currentRank < 0) {
+      log.warn(
+          "Unknown fulfillment rank for order {} status {} -- skipping projection to {}",
+          order.getId(),
+          order.getStatus(),
+          target);
+      return;
+    }
     if (targetRank <= currentRank) {
       return;
     }
