@@ -27,7 +27,6 @@ class KitchenTicketCreationServiceTest {
 
   private KitchenProcessedEventRepository processedEventRepository;
   private KitchenTicketRepository kitchenTicketRepository;
-  private KitchenLedgerWriter ledgerWriter;
   private KitchenTicketCreationService service;
 
   private final UUID eventId = UUID.randomUUID();
@@ -41,16 +40,12 @@ class KitchenTicketCreationServiceTest {
   void setUp() {
     processedEventRepository = mock(KitchenProcessedEventRepository.class);
     kitchenTicketRepository = mock(KitchenTicketRepository.class);
-    ledgerWriter = mock(KitchenLedgerWriter.class);
-    service =
-        new KitchenTicketCreationService(
-            processedEventRepository, kitchenTicketRepository, ledgerWriter);
+    service = new KitchenTicketCreationService(processedEventRepository, kitchenTicketRepository);
   }
 
   @Test
   void firstDeliveryCreatesOneTicketWithAllManifestItems() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
     when(kitchenTicketRepository.existsByOrderId(any())).thenReturn(false);
 
     service.onOrderConfirmed(confirmedEvent());
@@ -86,7 +81,6 @@ class KitchenTicketCreationServiceTest {
             eventId, "kitchen-order-confirmed"))
         .thenReturn(false)
         .thenReturn(true);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
 
     service.onOrderConfirmed(confirmedEvent());
     service.onOrderConfirmed(confirmedEvent());
@@ -95,19 +89,24 @@ class KitchenTicketCreationServiceTest {
   }
 
   @Test
-  void concurrentDuplicateLedgerInsertIsSwallowedAndCreatesNoTicket() {
+  void concurrentDuplicateLedgerInsertPropagatesToRollBackTheWholeTransaction() {
+    // CR-01 fix: the ledger row is inserted LAST in the same transaction as the ticket. A
+    // concurrent-duplicate unique violation must propagate (not be swallowed) so the WHOLE
+    // transaction — ticket + ledger row — rolls back and Kafka redelivers, instead of
+    // pre-committing a "processed" marker ahead of an unguaranteed ticket save.
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(false);
+    when(kitchenTicketRepository.existsByOrderId(any())).thenReturn(false);
+    when(processedEventRepository.save(any()))
+        .thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
 
-    service.onOrderConfirmed(confirmedEvent());
-
-    verify(kitchenTicketRepository, never()).save(any());
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.onOrderConfirmed(confirmedEvent()))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
   }
 
   @Test
   void sameOrderDuplicateUnderNewEventIdIsAbsorbedWithoutSavingOrThrowing() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
     when(kitchenTicketRepository.existsByOrderId(orderId)).thenReturn(true);
 
     service.onOrderConfirmed(confirmedEvent());
@@ -118,12 +117,38 @@ class KitchenTicketCreationServiceTest {
   @Test
   void newOrderIdWithNoExistingTicketBuildsAndSavesExactlyOnce() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
     when(kitchenTicketRepository.existsByOrderId(orderId)).thenReturn(false);
 
     service.onOrderConfirmed(confirmedEvent());
 
     verify(kitchenTicketRepository, times(1)).save(any());
+  }
+
+  @Test
+  void malformedEventWithNullLinesAndNullToppingsDoesNotThrowAndStillSavesTicket() {
+    // IN-01: a malformed OrderConfirmedEvent (null lines, or a line with null selectedToppings)
+    // must not NPE — an NPE here previously happened AFTER the ledger row was committed, dropping
+    // the ticket forever with no recovery.
+    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(kitchenTicketRepository.existsByOrderId(any())).thenReturn(false);
+
+    OrderConfirmedLine nullToppingLine =
+        new OrderConfirmedLine(lineId1, dishId1, "Pho Bo", 2, null);
+    OrderConfirmedEvent nullToppings =
+        new OrderConfirmedEvent(
+            UUID.randomUUID(),
+            OrderConfirmedEvent.TYPE,
+            Instant.now(),
+            orderId,
+            List.of(nullToppingLine));
+    service.onOrderConfirmed(nullToppings);
+
+    OrderConfirmedEvent nullLines =
+        new OrderConfirmedEvent(
+            UUID.randomUUID(), OrderConfirmedEvent.TYPE, Instant.now(), UUID.randomUUID(), null);
+    service.onOrderConfirmed(nullLines);
+
+    verify(kitchenTicketRepository, times(2)).save(any());
   }
 
   private OrderConfirmedEvent confirmedEvent() {

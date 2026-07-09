@@ -31,7 +31,6 @@ class KitchenStatusProjectionServiceTest {
 
   private OrderProcessedEventRepository processedEventRepository;
   private OrderRepository orderRepository;
-  private OrderLedgerWriter ledgerWriter;
   private KitchenStatusProjectionService service;
 
   private final UUID orderId = UUID.randomUUID();
@@ -42,11 +41,8 @@ class KitchenStatusProjectionServiceTest {
   void setUp() {
     processedEventRepository = mock(OrderProcessedEventRepository.class);
     orderRepository = mock(OrderRepository.class);
-    ledgerWriter = mock(OrderLedgerWriter.class);
-    service =
-        new KitchenStatusProjectionService(processedEventRepository, orderRepository, ledgerWriter);
+    service = new KitchenStatusProjectionService(processedEventRepository, orderRepository);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
   }
 
   @Test
@@ -168,7 +164,7 @@ class KitchenStatusProjectionServiceTest {
     service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.PREPARING)));
 
     verify(orderRepository, never()).findById(any());
-    verify(processedEventRepository, never()).saveAndFlush(any());
+    verify(processedEventRepository, never()).save(any());
   }
 
   @Test

@@ -45,7 +45,6 @@ class InventoryReservationServiceTest {
   private InventoryStockBalanceRepository balanceRepository;
   private IngredientRepository ingredientRepository;
   private MenuRecipeCostingPort menuRecipeCostingPort;
-  private InventoryLedgerWriter ledgerWriter;
   private OutboxWriter outboxWriter;
   private InventoryReservationService service;
 
@@ -56,7 +55,6 @@ class InventoryReservationServiceTest {
     balanceRepository = mock(InventoryStockBalanceRepository.class);
     ingredientRepository = mock(IngredientRepository.class);
     menuRecipeCostingPort = mock(MenuRecipeCostingPort.class);
-    ledgerWriter = mock(InventoryLedgerWriter.class);
     outboxWriter = mock(OutboxWriter.class);
     // Real resolver wired with the existing mocks so recipe-resolution behavior is exercised
     // end-to-end through the extracted shared collaborator (D-02, behavior-preserving refactor).
@@ -69,14 +67,12 @@ class InventoryReservationServiceTest {
             balanceRepository,
             ingredientRepository,
             recipeRequirementResolver,
-            ledgerWriter,
             outboxWriter);
     // @Value field is set by Spring at runtime; mirror it here (matches PaymentServiceTest idiom).
     ReflectionTestUtils.setField(service, "orderStockResultsTopic", ORDER_STOCK_RESULTS_TOPIC);
-    // Defaults: not yet processed, no reservation, ledger insert succeeds, saves echo their arg.
+    // Defaults: not yet processed, no reservation, saves echo their arg.
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
     when(reservationRepository.existsByOrderId(any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
     when(balanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(reservationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
   }
@@ -212,7 +208,7 @@ class InventoryReservationServiceTest {
 
     service.onOrderCreated(event);
 
-    verify(ledgerWriter, never()).tryInsert(any(), any());
+    verify(processedEventRepository, never()).save(any());
     verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
     verify(reservationRepository, never()).save(any());
     verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
@@ -226,24 +222,31 @@ class InventoryReservationServiceTest {
 
     service.onOrderCreated(event);
 
-    verify(ledgerWriter, never()).tryInsert(any(), any());
+    verify(processedEventRepository, never()).save(any());
     verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
     verify(reservationRepository, never()).save(any());
     verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
   @Test
-  void concurrentDuplicateLedgerInsertIsSkippedWithoutPoisoningTransaction() {
+  void concurrentDuplicateLedgerInsertPropagatesToRollBackTheWholeTransaction() {
+    // CR-01 fix: the ledger row is inserted LAST in the same transaction as the reservation +
+    // outbox row. A concurrent-duplicate unique violation must propagate (not be swallowed) so the
+    // WHOLE transaction rolls back and Kafka redelivers, instead of pre-committing a "processed"
+    // marker ahead of an unguaranteed stock verdict.
+    UUID ingredientA = UUID.randomUUID();
     UUID dishId = UUID.randomUUID();
     OrderCreatedEvent event = event(line(dishId, 1));
-    when(ledgerWriter.tryInsert(event.eventId(), InventoryReservationService.CONSUMER_NAME))
-        .thenReturn(false);
+    stubRecipe(RecipeTargetType.DISH, dishId, recipeLine(ingredientA, "5", "g"));
+    stubIngredient(ingredientA, "g");
+    when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
+        .thenReturn(
+            Optional.of(balance(ingredientA, "g", BigDecimal.valueOf(10), BigDecimal.ZERO)));
+    when(processedEventRepository.save(any()))
+        .thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
 
-    service.onOrderCreated(event);
-
-    verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
-    verify(reservationRepository, never()).save(any());
-    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.onOrderCreated(event))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
   }
 
   @Test

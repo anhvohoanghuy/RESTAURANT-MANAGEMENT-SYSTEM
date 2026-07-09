@@ -2,6 +2,7 @@ package com.example.feat1.DDD.inventory_context.application;
 
 import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementResolver;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientEntity;
+import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryProcessedEventEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockBalanceEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.IngredientRepository;
@@ -62,7 +63,6 @@ public class InventoryReservationService {
   private final InventoryStockBalanceRepository balanceRepository;
   private final IngredientRepository ingredientRepository;
   private final RecipeRequirementResolver recipeRequirementResolver;
-  private final InventoryLedgerWriter ledgerWriter;
   private final OutboxWriter outboxWriter;
 
   @Value("${inventory.events.order-stock-results-topic:inventory.order-stock-results}")
@@ -73,20 +73,12 @@ public class InventoryReservationService {
     UUID eventId = event.eventId();
     UUID orderId = event.orderId();
 
-    // (1) Idempotency guard: fast pre-check, then insert+flush the ledger row and rely on the
-    // unique (event_id, consumer_name) constraint to catch a concurrent duplicate (D-03).
+    // (1) Idempotency fast pre-check: absorb an already-recorded replay (ledger row) or an
+    // already-reserved order cheaply. The authoritative ledger insert happens at the END of this
+    // method, in this same transaction (WR-01 / CR-01 fix / D-03).
     if (processedEventRepository.existsByEventIdAndConsumerName(eventId, CONSUMER_NAME)
         || reservationRepository.existsByOrderId(orderId)) {
       log.debug("Skipping already-processed OrderCreated eventId={} orderId={}", eventId, orderId);
-      return;
-    }
-    // Insert the ledger row in its OWN REQUIRES_NEW transaction (WR-01) so a concurrent-duplicate
-    // constraint violation rolls back only the inner transaction — it never poisons this
-    // reservation
-    // transaction.
-    if (!ledgerWriter.tryInsert(eventId, CONSUMER_NAME)) {
-      log.debug(
-          "Concurrent duplicate OrderCreated eventId={} orderId={} — skipping", eventId, orderId);
       return;
     }
 
@@ -157,6 +149,22 @@ public class InventoryReservationService {
         orderStockResultsTopic,
         orderId.toString(),
         result);
+
+    // (6) Record the idempotency-ledger row LAST, in THIS transaction, so it commits atomically
+    // with the reservation and the outbox row. A concurrent-duplicate unique violation rolls back
+    // the WHOLE transaction (Kafka redelivers; the pre-check + per-order reservation guard then
+    // absorb the replay) instead of pre-committing a "processed" marker in a separate REQUIRES_NEW
+    // transaction ahead of the reservation, which could silently drop the stock verdict on a later
+    // failure (CR-01 / WR-01 fix).
+    recordProcessed(eventId);
+  }
+
+  private void recordProcessed(UUID eventId) {
+    InventoryProcessedEventEntity ledger = new InventoryProcessedEventEntity();
+    ledger.setEventId(eventId);
+    ledger.setConsumerName(CONSUMER_NAME);
+    ledger.setProcessedAt(Instant.now());
+    processedEventRepository.save(ledger);
   }
 
   /**

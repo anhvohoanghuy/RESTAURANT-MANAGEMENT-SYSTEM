@@ -5,11 +5,14 @@ import com.example.feat1.DDD.kitchen_context.application.event.KitchenTicketStat
 import com.example.feat1.DDD.kitchen_context.domain.model.KitchenItemStatus;
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderEntity;
+import com.example.feat1.DDD.order_context.infrastructure.entity.OrderProcessedEventEntity;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProcessedEventRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,17 +59,13 @@ public class KitchenStatusProjectionService {
 
   private final OrderProcessedEventRepository processedEventRepository;
   private final OrderRepository orderRepository;
-  private final OrderLedgerWriter ledgerWriter;
 
   @Transactional
   public void onTicketStatusChanged(KitchenTicketStatusChangedEvent event) {
-    // (1) Idempotency: fast pre-check, then delegate the insert+flush to a REQUIRES_NEW ledger
-    // writer (I-WR-01) so a concurrent-duplicate violation rolls back only its own inner
-    // transaction instead of marking this business transaction rollback-only.
+    // (1) Idempotency fast pre-check: absorb an already-recorded replay cheaply. The authoritative
+    // ledger insert happens at the END of this method, in this same transaction (I-WR-01 / CR-01
+    // fix).
     if (processedEventRepository.existsByEventIdAndConsumerName(event.eventId(), CONSUMER_NAME)) {
-      return;
-    }
-    if (!ledgerWriter.tryInsert(event.eventId(), CONSUMER_NAME)) {
       return;
     }
 
@@ -108,6 +107,21 @@ public class KitchenStatusProjectionService {
     }
 
     order.setStatus(target);
+
+    // Record the idempotency-ledger row LAST, in THIS transaction, so it commits atomically with
+    // the status advance. A concurrent-duplicate unique violation rolls back the WHOLE transaction
+    // (Kafka redelivers; the pre-check + forward-only rank guard then absorb the replay) instead of
+    // pre-committing a "processed" marker in a separate REQUIRES_NEW transaction ahead of the
+    // projection write (CR-01 / I-WR-01 fix).
+    recordProcessed(event.eventId());
+  }
+
+  private void recordProcessed(UUID eventId) {
+    OrderProcessedEventEntity ledger = new OrderProcessedEventEntity();
+    ledger.setEventId(eventId);
+    ledger.setConsumerName(CONSUMER_NAME);
+    ledger.setProcessedAt(Instant.now());
+    processedEventRepository.save(ledger);
   }
 
   private OrderStatus deriveTargetStatus(List<ItemStatus> items) {

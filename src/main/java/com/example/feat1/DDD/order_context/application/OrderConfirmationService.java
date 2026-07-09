@@ -9,6 +9,7 @@ import com.example.feat1.DDD.order_context.application.event.OrderStockResultEve
 import com.example.feat1.DDD.order_context.domain.model.OrderStatus;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderEntity;
 import com.example.feat1.DDD.order_context.infrastructure.entity.OrderLineEntity;
+import com.example.feat1.DDD.order_context.infrastructure.entity.OrderProcessedEventEntity;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProcessedEventRepository;
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
 import com.example.feat1.DDD.shared.outbox.application.OutboxWriter;
@@ -44,7 +45,6 @@ public class OrderConfirmationService {
 
   private final OrderProcessedEventRepository processedEventRepository;
   private final OrderRepository orderRepository;
-  private final OrderLedgerWriter ledgerWriter;
   private final OutboxWriter outboxWriter;
 
   @Value("${order.events.order-confirmed-topic:orders.confirmed}")
@@ -52,13 +52,9 @@ public class OrderConfirmationService {
 
   @Transactional
   public void onStockResult(OrderStockResultEvent event) {
-    // (1) Idempotency: fast pre-check, then the REQUIRES_NEW ledger insert as the authoritative
-    // guard — isolated in its own transaction so a concurrent-duplicate violation never poisons
-    // this outer transaction (I-WR-01).
+    // (1) Idempotency fast pre-check: absorb an already-recorded replay cheaply. The authoritative
+    // guard is the ledger insert at the END of this method (I-WR-01 / CR-01 fix).
     if (processedEventRepository.existsByEventIdAndConsumerName(event.eventId(), CONSUMER_NAME)) {
-      return;
-    }
-    if (!ledgerWriter.tryInsert(event.eventId(), CONSUMER_NAME)) {
       return;
     }
 
@@ -86,6 +82,22 @@ public class OrderConfirmationService {
       order.setStatus(OrderStatus.REJECTED);
       order.setRejectionReason(describe(event.shortfalls()));
     }
+
+    // (4) Record the idempotency-ledger row LAST, in THIS transaction, so it commits atomically
+    // with the status transition and any outbox row. A concurrent-duplicate unique violation now
+    // rolls back the WHOLE transaction — Kafka redelivers and the pre-check above absorbs the
+    // replay — instead of pre-committing a "processed" marker in a separate REQUIRES_NEW
+    // transaction ahead of unguaranteed business work, which could strand the order forever
+    // (CR-01 / I-WR-01 fix).
+    recordProcessed(event.eventId());
+  }
+
+  private void recordProcessed(UUID eventId) {
+    OrderProcessedEventEntity ledger = new OrderProcessedEventEntity();
+    ledger.setEventId(eventId);
+    ledger.setConsumerName(CONSUMER_NAME);
+    ledger.setProcessedAt(Instant.now());
+    processedEventRepository.save(ledger);
   }
 
   private OrderConfirmedEvent toOrderConfirmedEvent(OrderEntity order) {

@@ -1,6 +1,7 @@
 package com.example.feat1.DDD.order_context.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -32,7 +33,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 class OrderConfirmationServiceTest {
   private OrderProcessedEventRepository processedEventRepository;
   private OrderRepository orderRepository;
-  private OrderLedgerWriter ledgerWriter;
   private OutboxWriter outboxWriter;
   private OrderConfirmationService service;
 
@@ -46,11 +46,8 @@ class OrderConfirmationServiceTest {
   void setUp() {
     processedEventRepository = mock(OrderProcessedEventRepository.class);
     orderRepository = mock(OrderRepository.class);
-    ledgerWriter = mock(OrderLedgerWriter.class);
     outboxWriter = mock(OutboxWriter.class);
-    service =
-        new OrderConfirmationService(
-            processedEventRepository, orderRepository, ledgerWriter, outboxWriter);
+    service = new OrderConfirmationService(processedEventRepository, orderRepository, outboxWriter);
     ReflectionTestUtils.setField(service, "orderConfirmedTopic", "orders.confirmed");
   }
 
@@ -58,7 +55,6 @@ class OrderConfirmationServiceTest {
   void confirmedResultTransitionsPendingOrderToConfirmedAndWritesOutboxRowInTx() {
     OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(true);
     when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
     service.onStockResult(confirmedEvent());
@@ -102,7 +98,6 @@ class OrderConfirmationServiceTest {
   void rejectedResultTransitionsPendingOrderToRejectedWithReason() {
     OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(true);
     when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
     service.onStockResult(rejectedEvent());
@@ -116,7 +111,6 @@ class OrderConfirmationServiceTest {
   void rejectedResultWithManyShortfallsCapsRejectionReasonAtMaxLength() {
     OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(true);
     when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
     List<Shortfall> manyShortfalls = new ArrayList<>();
@@ -150,26 +144,30 @@ class OrderConfirmationServiceTest {
     service.onStockResult(confirmedEvent());
 
     verify(orderRepository, never()).findById(any());
-    verify(ledgerWriter, never()).tryInsert(any(), any());
     verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
+    verify(processedEventRepository, never()).save(any());
   }
 
   @Test
-  void concurrentDuplicateLedgerInsertIsNoOpAndDoesNotThrow() {
+  void concurrentDuplicateLedgerInsertPropagatesToRollBackTheWholeTransaction() {
+    // CR-01 fix: the idempotency-ledger row is now inserted LAST in the same transaction. A
+    // concurrent-duplicate unique violation must propagate (not be swallowed) so the WHOLE
+    // transaction — status change + outbox row + ledger row — rolls back and Kafka redelivers,
+    // instead of pre-committing a "processed" marker ahead of unguaranteed business work.
+    OrderEntity order = orderWithStatus(OrderStatus.PENDING_CONFIRMATION);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(false);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+    when(processedEventRepository.save(any()))
+        .thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
 
-    service.onStockResult(confirmedEvent());
-
-    verify(orderRepository, never()).findById(any());
-    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
+    assertThatThrownBy(() -> service.onStockResult(confirmedEvent()))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
   }
 
   @Test
   void nonPendingOrderIsNotTransitioned() {
     OrderEntity order = orderWithStatus(OrderStatus.CONFIRMED);
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(ledgerWriter.tryInsert(eventId, OrderConfirmationService.CONSUMER_NAME)).thenReturn(true);
     when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
     service.onStockResult(rejectedEvent());
