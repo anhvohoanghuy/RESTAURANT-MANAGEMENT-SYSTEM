@@ -11,7 +11,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.feat1.DDD.inventory_context.application.event.SettleTriggerEvent;
 import com.example.feat1.DDD.inventory_context.domain.model.IngredientStatus;
 import com.example.feat1.DDD.inventory_context.domain.model.InventoryDomainException;
 import com.example.feat1.DDD.inventory_context.domain.model.InventoryMovementType;
@@ -21,6 +20,7 @@ import com.example.feat1.DDD.inventory_context.domain.service.RecipeRequirementR
 import com.example.feat1.DDD.inventory_context.domain.snapshot.OrderLineRecipeSnapshot;
 import com.example.feat1.DDD.inventory_context.domain.snapshot.RecipeCostingSnapshot;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.IngredientEntity;
+import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryProcessedEventEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockBalanceEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockMovementEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity;
@@ -33,6 +33,7 @@ import com.example.feat1.DDD.inventory_context.infrastructure.repository.Invento
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryStockMovementRepository;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.StockReservationRepository;
 import com.example.feat1.DDD.menu_context.domain.model.RecipeTargetType;
+import com.example.feat1.DDD.order_context.application.event.OrderCancelledEvent;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -43,60 +44,57 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
-class InventoryReservationSettlementServiceTest {
+class InventoryReservationReleaseServiceTest {
   private static final String DEFAULT = InventoryStockBalanceEntity.DEFAULT_LOCATION;
 
-  private InventoryLedgerWriter ledgerWriter;
   private InventoryProcessedEventRepository processedEventRepository;
-  private InventoryLineSettlementRepository lineSettlementRepository;
   private InventoryLineReleaseRepository lineReleaseRepository;
+  private InventoryLineSettlementRepository lineSettlementRepository;
   private StockReservationRepository reservationRepository;
   private InventoryStockBalanceRepository balanceRepository;
   private InventoryStockMovementRepository movementRepository;
   private OrderLineLookupPort orderLineLookupPort;
   private MenuRecipeCostingPort menuRecipeCostingPort;
   private IngredientRepository ingredientRepository;
-  private InventoryReservationSettlementService service;
+  private InventoryReservationReleaseService service;
 
   @BeforeEach
   void setUp() {
-    ledgerWriter = mock(InventoryLedgerWriter.class);
     processedEventRepository = mock(InventoryProcessedEventRepository.class);
-    lineSettlementRepository = mock(InventoryLineSettlementRepository.class);
     lineReleaseRepository = mock(InventoryLineReleaseRepository.class);
+    lineSettlementRepository = mock(InventoryLineSettlementRepository.class);
     reservationRepository = mock(StockReservationRepository.class);
     balanceRepository = mock(InventoryStockBalanceRepository.class);
     movementRepository = mock(InventoryStockMovementRepository.class);
     orderLineLookupPort = mock(OrderLineLookupPort.class);
     menuRecipeCostingPort = mock(MenuRecipeCostingPort.class);
     ingredientRepository = mock(IngredientRepository.class);
-    // Real resolver so recipe re-resolution is exercised through the shared collaborator (D-02).
+    // Real resolver so recipe re-resolution is exercised through the shared collaborator.
     RecipeRequirementResolver resolver =
         new RecipeRequirementResolver(menuRecipeCostingPort, ingredientRepository);
     service =
-        new InventoryReservationSettlementService(
-            ledgerWriter,
+        new InventoryReservationReleaseService(
             processedEventRepository,
-            lineSettlementRepository,
             lineReleaseRepository,
+            lineSettlementRepository,
             reservationRepository,
             balanceRepository,
             movementRepository,
             orderLineLookupPort,
             resolver);
 
-    // Defaults: not processed, not settled, ledger insert succeeds, saves echo.
+    // Defaults: not processed, not released, saves echo.
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
-    when(lineSettlementRepository.existsByOrderIdAndOrderLineId(any(), any())).thenReturn(false);
-    when(lineReleaseRepository.countByOrderId(any())).thenReturn(0L);
-    when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
+    when(lineReleaseRepository.existsByOrderIdAndOrderLineId(any(), any())).thenReturn(false);
+    when(lineSettlementRepository.countByOrderId(any())).thenReturn(0L);
     when(balanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(movementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-    when(lineSettlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(lineReleaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(processedEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
   }
 
   @Test
-  void singleLineRecipeReResolvedAndDeducted() {
+  void singleLineRecipeReResolvedAndReservedDecrementedOnly() {
     UUID orderId = UUID.randomUUID();
     UUID orderLineId = UUID.randomUUID();
     UUID dishId = UUID.randomUUID();
@@ -110,17 +108,17 @@ class InventoryReservationSettlementServiceTest {
     when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
         .thenReturn(Optional.of(balanceA));
     heldReservation(orderId);
-    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(1L);
+    when(lineReleaseRepository.countByOrderId(orderId)).thenReturn(1L);
 
-    service.onSettleTrigger(event(orderId, orderLineId, 1));
+    service.onOrderCancelled(event(orderId, List.of(orderLineId), 1));
 
-    // need = 3 x 2 = 6; on_hand 50 - 6 = 44; reserved 20 - 6 = 14.
-    assertThat(balanceA.getQuantityOnHand()).isEqualByComparingTo("44");
+    // need = 3 x 2 = 6; reserved 20 - 6 = 14; on_hand untouched at 50.
     assertThat(balanceA.getReservedQuantity()).isEqualByComparingTo("14");
+    assertThat(balanceA.getQuantityOnHand()).isEqualByComparingTo("50");
   }
 
   @Test
-  void clampsOnHandToZeroAndLogsAnomaly() {
+  void clampsReservedToZeroAndLogsAnomalyWithoutTouchingOnHand() {
     UUID orderId = UUID.randomUUID();
     UUID orderLineId = UUID.randomUUID();
     UUID dishId = UUID.randomUUID();
@@ -129,23 +127,23 @@ class InventoryReservationSettlementServiceTest {
     stubLine(orderId, orderLineId, dishId, 1, List.of());
     stubRecipe(RecipeTargetType.DISH, dishId, recipeLine(ingredientA, "5", "g"));
     stubIngredient(ingredientA, "g");
-    // on_hand 3 < need 5, reserved 2 < need 5 -> both clamp to 0, no throw.
+    // reserved 2 < need 5 -> clamps to 0, no throw; on_hand untouched.
     InventoryStockBalanceEntity balanceA =
-        balance(ingredientA, "g", BigDecimal.valueOf(3), BigDecimal.valueOf(2));
+        balance(ingredientA, "g", BigDecimal.valueOf(30), BigDecimal.valueOf(2));
     when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
         .thenReturn(Optional.of(balanceA));
     heldReservation(orderId);
-    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(1L);
+    when(lineReleaseRepository.countByOrderId(orderId)).thenReturn(1L);
 
-    assertThatCode(() -> service.onSettleTrigger(event(orderId, orderLineId, 1)))
+    assertThatCode(() -> service.onOrderCancelled(event(orderId, List.of(orderLineId), 1)))
         .doesNotThrowAnyException();
 
-    assertThat(balanceA.getQuantityOnHand()).isEqualByComparingTo("0");
     assertThat(balanceA.getReservedQuantity()).isEqualByComparingTo("0");
+    assertThat(balanceA.getQuantityOnHand()).isEqualByComparingTo("30");
   }
 
   @Test
-  void recordsConsumptionMovementPerIngredient() {
+  void neverCallsSetQuantityOnHand() {
     UUID orderId = UUID.randomUUID();
     UUID orderLineId = UUID.randomUUID();
     UUID dishId = UUID.randomUUID();
@@ -159,24 +157,46 @@ class InventoryReservationSettlementServiceTest {
     when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
         .thenReturn(Optional.of(balanceA));
     heldReservation(orderId);
-    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(1L);
+    when(lineReleaseRepository.countByOrderId(orderId)).thenReturn(1L);
+    BigDecimal onHandBefore = balanceA.getQuantityOnHand();
 
-    service.onSettleTrigger(event(orderId, orderLineId, 1));
+    service.onOrderCancelled(event(orderId, List.of(orderLineId), 1));
+
+    assertThat(balanceA.getQuantityOnHand()).isEqualByComparingTo(onHandBefore);
+  }
+
+  @Test
+  void recordsReservationReleaseMovementPerIngredientWithNullActor() {
+    UUID orderId = UUID.randomUUID();
+    UUID orderLineId = UUID.randomUUID();
+    UUID dishId = UUID.randomUUID();
+    UUID ingredientA = UUID.randomUUID();
+
+    stubLine(orderId, orderLineId, dishId, 1, List.of());
+    stubRecipe(RecipeTargetType.DISH, dishId, recipeLine(ingredientA, "4", "g"));
+    stubIngredient(ingredientA, "g");
+    InventoryStockBalanceEntity balanceA =
+        balance(ingredientA, "g", BigDecimal.valueOf(10), BigDecimal.valueOf(4));
+    when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
+        .thenReturn(Optional.of(balanceA));
+    heldReservation(orderId);
+    when(lineReleaseRepository.countByOrderId(orderId)).thenReturn(1L);
+
+    service.onOrderCancelled(event(orderId, List.of(orderLineId), 1));
 
     ArgumentCaptor<InventoryStockMovementEntity> captor =
         ArgumentCaptor.forClass(InventoryStockMovementEntity.class);
     verify(movementRepository).save(captor.capture());
     InventoryStockMovementEntity movement = captor.getValue();
-    assertThat(movement.getMovementType()).isEqualTo(InventoryMovementType.CONSUMPTION);
+    assertThat(movement.getMovementType()).isEqualTo(InventoryMovementType.RESERVATION_RELEASE);
+    assertThat(movement.getActorId()).isNull();
     assertThat(movement.getReferenceType()).isEqualTo("ORDER_LINE");
     assertThat(movement.getReferenceId()).isEqualTo(orderLineId);
     assertThat(movement.getQuantity()).isEqualByComparingTo("4");
-    assertThat(movement.getBaseQuantityDelta()).isEqualByComparingTo("-4");
-    assertThat(movement.getResultingBalance()).isEqualByComparingTo("6");
   }
 
   @Test
-  void marksSettledOnlyWhenLastLineSettles() {
+  void marksReleasedOnlyWhenLastLineReleases() {
     UUID orderId = UUID.randomUUID();
     UUID lineOne = UUID.randomUUID();
     UUID lineTwo = UUID.randomUUID();
@@ -192,94 +212,77 @@ class InventoryReservationSettlementServiceTest {
     when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
         .thenReturn(Optional.of(balanceA));
     StockReservationEntity reservation = heldReservation(orderId);
-    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(1L, 2L);
+    when(lineReleaseRepository.countByOrderId(orderId)).thenReturn(1L, 2L);
 
-    service.onSettleTrigger(event(orderId, lineOne, 2));
+    service.onOrderCancelled(event(orderId, List.of(lineOne), 2));
     assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.HELD);
 
-    service.onSettleTrigger(event(orderId, lineTwo, 2));
-    assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.SETTLED);
+    service.onOrderCancelled(event(orderId, List.of(lineTwo), 2));
+    assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.RELEASED);
   }
 
   @Test
-  void outOfOrderLastLineStillFlipsExactlyOnce() {
-    UUID orderId = UUID.randomUUID();
-    UUID lineOne = UUID.randomUUID();
-    UUID lineTwo = UUID.randomUUID();
-    UUID dishId = UUID.randomUUID();
-    UUID ingredientA = UUID.randomUUID();
-
-    stubLine(orderId, lineOne, dishId, 1, List.of());
-    stubLine(orderId, lineTwo, dishId, 1, List.of());
-    stubRecipe(RecipeTargetType.DISH, dishId, recipeLine(ingredientA, "1", "g"));
-    stubIngredient(ingredientA, "g");
-    InventoryStockBalanceEntity balanceA =
-        balance(ingredientA, "g", BigDecimal.valueOf(100), BigDecimal.valueOf(100));
-    when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
-        .thenReturn(Optional.of(balanceA));
-    StockReservationEntity reservation = heldReservation(orderId);
-    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(1L, 2L);
-
-    // Settle line 2 first, then line 1 — count-based flip is positional-agnostic.
-    service.onSettleTrigger(event(orderId, lineTwo, 2));
-    assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.HELD);
-
-    service.onSettleTrigger(event(orderId, lineOne, 2));
-    assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.SETTLED);
-  }
-
-  @Test
-  void duplicateEventIdSkips() {
+  void idempotentOnEventIdRedelivery() {
     UUID orderId = UUID.randomUUID();
     UUID orderLineId = UUID.randomUUID();
-    SettleTriggerEvent event = event(orderId, orderLineId, 1);
+    OrderCancelledEvent event = event(orderId, List.of(orderLineId), 1);
     when(processedEventRepository.existsByEventIdAndConsumerName(
-            event.eventId(), InventoryReservationSettlementService.CONSUMER_NAME))
+            event.eventId(), InventoryReservationReleaseService.CONSUMER_NAME))
         .thenReturn(true);
 
-    service.onSettleTrigger(event);
+    service.onOrderCancelled(event);
 
-    verify(ledgerWriter, never()).tryInsert(any(), any());
     verify(reservationRepository, never()).lockByOrderId(any());
     verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
     verify(movementRepository, never()).save(any());
+    verify(processedEventRepository, never()).save(any());
   }
 
   @Test
-  void duplicateOrderLineSkipsEvenWithNewEventId() {
+  void idempotentWhenAllCancelledLinesAlreadyReleased() {
     UUID orderId = UUID.randomUUID();
     UUID orderLineId = UUID.randomUUID();
-    when(lineSettlementRepository.existsByOrderIdAndOrderLineId(orderId, orderLineId))
+    when(lineReleaseRepository.existsByOrderIdAndOrderLineId(orderId, orderLineId))
         .thenReturn(true);
 
-    service.onSettleTrigger(event(orderId, orderLineId, 1));
+    service.onOrderCancelled(event(orderId, List.of(orderLineId), 1));
 
-    verify(ledgerWriter, never()).tryInsert(any(), any());
     verify(reservationRepository, never()).lockByOrderId(any());
     verify(movementRepository, never()).save(any());
+    verify(processedEventRepository, never()).save(any());
   }
 
   @Test
   void missingReservationThrowsForDltRouting() {
     UUID orderId = UUID.randomUUID();
     UUID orderLineId = UUID.randomUUID();
-    UUID dishId = UUID.randomUUID();
-    UUID ingredientA = UUID.randomUUID();
-
-    stubLine(orderId, orderLineId, dishId, 1, List.of());
-    stubRecipe(RecipeTargetType.DISH, dishId, recipeLine(ingredientA, "1", "g"));
-    stubIngredient(ingredientA, "g");
     when(reservationRepository.lockByOrderId(orderId)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.onSettleTrigger(event(orderId, orderLineId, 1)))
+    assertThatThrownBy(() -> service.onOrderCancelled(event(orderId, List.of(orderLineId), 1)))
         .isInstanceOf(InventoryDomainException.class);
 
     verify(movementRepository, never()).save(any());
-    verify(lineSettlementRepository, never()).save(any());
+    verify(lineReleaseRepository, never()).save(any());
   }
 
   @Test
-  void alreadySettledReservationIsBenign() {
+  void nonHeldReservationIsBenign() {
+    UUID orderId = UUID.randomUUID();
+    UUID orderLineId = UUID.randomUUID();
+    StockReservationEntity reservation = heldReservation(orderId);
+    reservation.setStatus(ReservationStatus.SETTLED);
+
+    assertThatCode(() -> service.onOrderCancelled(event(orderId, List.of(orderLineId), 1)))
+        .doesNotThrowAnyException();
+
+    verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
+    verify(movementRepository, never()).save(any());
+    verify(lineReleaseRepository, never()).save(any());
+    verify(orderLineLookupPort, never()).findLine(any(), any());
+  }
+
+  @Test
+  void recordsLedgerRowLastAfterBusinessWork() {
     UUID orderId = UUID.randomUUID();
     UUID orderLineId = UUID.randomUUID();
     UUID dishId = UUID.randomUUID();
@@ -288,15 +291,18 @@ class InventoryReservationSettlementServiceTest {
     stubLine(orderId, orderLineId, dishId, 1, List.of());
     stubRecipe(RecipeTargetType.DISH, dishId, recipeLine(ingredientA, "1", "g"));
     stubIngredient(ingredientA, "g");
-    StockReservationEntity reservation = heldReservation(orderId);
-    reservation.setStatus(ReservationStatus.SETTLED);
+    InventoryStockBalanceEntity balanceA =
+        balance(ingredientA, "g", BigDecimal.valueOf(10), BigDecimal.valueOf(10));
+    when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
+        .thenReturn(Optional.of(balanceA));
+    heldReservation(orderId);
+    when(lineReleaseRepository.countByOrderId(orderId)).thenReturn(1L);
 
-    assertThatCode(() -> service.onSettleTrigger(event(orderId, orderLineId, 1)))
-        .doesNotThrowAnyException();
+    service.onOrderCancelled(event(orderId, List.of(orderLineId), 1));
 
-    verify(balanceRepository, never()).lockByIngredientAndLocation(any(), any());
-    verify(movementRepository, never()).save(any());
-    verify(lineSettlementRepository, never()).save(any());
+    InOrder inOrder = inOrder(lineReleaseRepository, processedEventRepository);
+    inOrder.verify(lineReleaseRepository).save(any());
+    inOrder.verify(processedEventRepository).save(any(InventoryProcessedEventEntity.class));
   }
 
   @Test
@@ -314,9 +320,9 @@ class InventoryReservationSettlementServiceTest {
     when(balanceRepository.lockByIngredientAndLocation(ingredientA, DEFAULT))
         .thenReturn(Optional.of(balanceA));
     heldReservation(orderId);
-    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(1L);
+    when(lineReleaseRepository.countByOrderId(orderId)).thenReturn(1L);
 
-    service.onSettleTrigger(event(orderId, orderLineId, 1));
+    service.onOrderCancelled(event(orderId, List.of(orderLineId), 1));
 
     InOrder inOrder = inOrder(reservationRepository, balanceRepository);
     inOrder.verify(reservationRepository).lockByOrderId(orderId);
@@ -325,13 +331,14 @@ class InventoryReservationSettlementServiceTest {
 
   // ---- fixtures -------------------------------------------------------------
 
-  private SettleTriggerEvent event(UUID orderId, UUID orderLineId, int totalLines) {
-    return new SettleTriggerEvent(
+  private OrderCancelledEvent event(UUID orderId, List<UUID> cancelledLineIds, int totalLines) {
+    return new OrderCancelledEvent(
         UUID.randomUUID(),
-        SettleTriggerEvent.TYPE,
+        OrderCancelledEvent.TYPE,
         Instant.now(),
         orderId,
-        orderLineId,
+        cancelledLineIds.size() == totalLines,
+        cancelledLineIds,
         totalLines);
   }
 

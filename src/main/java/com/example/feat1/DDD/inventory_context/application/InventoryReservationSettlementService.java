@@ -12,6 +12,7 @@ import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventorySt
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventoryStockMovementEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity.ReservationStatus;
+import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryLineReleaseRepository;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryLineSettlementRepository;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryProcessedEventRepository;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryStockBalanceRepository;
@@ -36,6 +37,11 @@ import org.springframework.transaction.annotation.Transactional;
  * is the inverse of the whole-order {@link InventoryReservationService} reserve saga: instead of
  * incrementing {@code reservedQuantity} it decrements BOTH {@code reservedQuantity} and {@code
  * quantityOnHand} for the one line's re-resolved recipe.
+ *
+ * <p>The completion guard (step 8) counts BOTH settled AND released lines ({@code settledCount +
+ * releasedCount >= totalLines}, phase 18 CANCEL-05) so a mixed settled/released order (some lines
+ * consumed at kitchen time, others cancelled first) still reaches a terminal reservation state
+ * instead of leaking a permanently-HELD reservation.
  *
  * <p>On a {@link SettleTriggerEvent} it: (1) short-circuits on either idempotency guard — the
  * eventId ledger or the per-(orderId,orderLineId) settlement row (D-05); (2) records the eventId in
@@ -68,6 +74,7 @@ public class InventoryReservationSettlementService {
   private final InventoryLedgerWriter ledgerWriter;
   private final InventoryProcessedEventRepository processedEventRepository;
   private final InventoryLineSettlementRepository lineSettlementRepository;
+  private final InventoryLineReleaseRepository lineReleaseRepository;
   private final StockReservationRepository reservationRepository;
   private final InventoryStockBalanceRepository balanceRepository;
   private final InventoryStockMovementRepository movementRepository;
@@ -196,11 +203,13 @@ public class InventoryReservationSettlementService {
     settlement.setSettledAt(now);
     lineSettlementRepository.save(settlement);
 
-    // (8) Flip the reservation to SETTLED only when the last line settles. count-then-flip is
-    // atomic
-    // against sibling settlements because we hold the reservation lock (D-04).
+    // (8) Flip the reservation to SETTLED only when the last line resolves — the denominator
+    // counts BOTH settled and released lines so a mixed settled/released order still reaches a
+    // terminal state (phase 18 CANCEL-05). count-then-flip is atomic against sibling
+    // settlements/releases because we hold the reservation lock (D-04).
     long settledCount = lineSettlementRepository.countByOrderId(orderId);
-    if (settledCount >= event.totalLines()) {
+    long releasedCount = lineReleaseRepository.countByOrderId(orderId);
+    if (settledCount + releasedCount >= event.totalLines()) {
       reservation.setStatus(ReservationStatus.SETTLED);
     }
   }

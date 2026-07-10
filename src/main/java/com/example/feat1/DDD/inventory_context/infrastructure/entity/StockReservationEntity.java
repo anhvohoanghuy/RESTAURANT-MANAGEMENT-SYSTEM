@@ -40,10 +40,15 @@ import lombok.Setter;
             columnNames = {"order_id"}))
 public class StockReservationEntity {
 
-  /** Lifecycle of a reservation. Created as HELD; settled to SETTLED once the order deducts. */
+  /**
+   * Lifecycle of a reservation. Created as HELD; settled to SETTLED once the order deducts, or
+   * released to RELEASED once every line is cancelled without settling (a mixed settled/released
+   * order still flips to SETTLED — RELEASED only applies to the pure whole-order-cancel case).
+   */
   public enum ReservationStatus {
     HELD,
-    SETTLED
+    SETTLED,
+    RELEASED
   }
 
   /** Reserved base quantity for a single ingredient within a reservation. */

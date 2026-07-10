@@ -17,6 +17,8 @@ public class InventoryDomainException extends AppException {
       "INVENTORY_SETTLEMENT_RESERVATION_MISSING";
   public static final String SETTLEMENT_ORDER_LINE_MISSING =
       "INVENTORY_SETTLEMENT_ORDER_LINE_MISSING";
+  public static final String RELEASE_RESERVATION_MISSING = "INVENTORY_RELEASE_RESERVATION_MISSING";
+  public static final String RELEASE_ORDER_LINE_MISSING = "INVENTORY_RELEASE_ORDER_LINE_MISSING";
 
   private InventoryDomainException(String code, String message, HttpStatus status) {
     super(code, message, status);
@@ -86,6 +88,27 @@ public class InventoryDomainException extends AppException {
     return new InventoryDomainException(
         SETTLEMENT_ORDER_LINE_MISSING,
         "Order line " + orderLineId + " for order " + orderId + " was not found to settle",
+        HttpStatus.CONFLICT);
+  }
+
+  /**
+   * Thrown when an OrderCancelled trigger arrives but no reservation exists for the order. Left OUT
+   * of the Kafka non-retryable set so a transient ordering race (cancel before reserve commits) is
+   * retried and only lands on the DLT after backoff exhaustion (mirrors D-05).
+   */
+  public static InventoryDomainException releaseReservationMissing(java.util.UUID orderId) {
+    return new InventoryDomainException(
+        RELEASE_RESERVATION_MISSING,
+        "No stock reservation found to release for order " + orderId,
+        HttpStatus.CONFLICT);
+  }
+
+  /** Thrown when the order line to release cannot be re-resolved (missing order-line data). */
+  public static InventoryDomainException releaseOrderLineMissing(
+      java.util.UUID orderId, java.util.UUID orderLineId) {
+    return new InventoryDomainException(
+        RELEASE_ORDER_LINE_MISSING,
+        "Order line " + orderLineId + " for order " + orderId + " was not found to release",
         HttpStatus.CONFLICT);
   }
 }

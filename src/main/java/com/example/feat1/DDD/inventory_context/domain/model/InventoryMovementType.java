@@ -19,7 +19,13 @@ public enum InventoryMovementType {
    */
   STOCK_COUNT,
   /** Outbound deduction settling a held reservation into an actual stock-on-hand decrease. */
-  CONSUMPTION;
+  CONSUMPTION,
+  /**
+   * Audit-only movement recording that a held reservation was released (reservedQuantity
+   * decremented) without ever touching quantityOnHand — the structural inverse of {@link
+   * #CONSUMPTION}.
+   */
+  RESERVATION_RELEASE;
 
   public boolean isInbound() {
     return this == RECEIPT || this == ADJUSTMENT_IN;
