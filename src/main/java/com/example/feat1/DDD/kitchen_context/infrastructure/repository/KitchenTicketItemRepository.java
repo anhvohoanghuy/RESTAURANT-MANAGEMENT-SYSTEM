@@ -24,6 +24,20 @@ public interface KitchenTicketItemRepository extends JpaRepository<KitchenTicket
   @Query("select i from KitchenTicketItemEntity i where i.id = :id and i.ticket.orderId = :orderId")
   Optional<KitchenTicketItemEntity> lockByOrderIdAndItemId(UUID orderId, UUID id);
 
+  /**
+   * Acquires a pessimistic write lock on the item row keyed by the order id and its {@code
+   * orderLineId} (plan 18-06, D-7). Used by {@code KitchenTicketInvalidationService} to serialize a
+   * cancel-triggered void against a concurrent staff advance of the same line's item, closing the
+   * cancel-vs-advance race — mirrors {@link #lockByOrderIdAndItemId}'s dual-key shape but keys on
+   * {@code orderLineId} since the inbound {@code OrderCancelledEvent} carries line ids, not kitchen
+   * item ids.
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select i from KitchenTicketItemEntity i where i.ticket.orderId = :orderId and"
+          + " i.orderLineId = :orderLineId")
+  Optional<KitchenTicketItemEntity> lockByOrderIdAndOrderLineId(UUID orderId, UUID orderLineId);
+
   List<KitchenTicketItemEntity> findByStatusNot(KitchenItemStatus status);
 
   /**

@@ -179,6 +179,30 @@ class KitchenTicketAdvanceServiceTest {
   }
 
   @Test
+  void advancingFromVoidedCancelledIsRejected() {
+    // 18-06 / D-7 regression: a kitchen item voided by KitchenTicketInvalidationService must be a
+    // true terminal state — staff can never advance it (which would otherwise fire a rogue
+    // SettleTrigger deducting stock already released back to Inventory).
+    KitchenTicketItemEntity item = itemWithStatus(KitchenItemStatus.CANCELLED);
+    when(itemRepository.lockByOrderIdAndItemId(orderId, itemId)).thenReturn(Optional.of(item));
+
+    assertThatThrownBy(
+            () ->
+                service.advance(
+                    orderId,
+                    itemId,
+                    new AdvanceItemStatusRequest(KitchenItemStatus.PREPARING),
+                    actorId))
+        .isInstanceOf(KitchenDomainException.class)
+        .hasFieldOrPropertyWithValue("code", KitchenDomainException.KITCHEN_TRANSITION_INVALID);
+
+    assertThat(item.getStatus()).isEqualTo(KitchenItemStatus.CANCELLED);
+    verify(itemRepository, never()).save(any());
+    verify(settleTriggerPublisher, never()).publishSettleTrigger(any());
+    verify(statusChangedPublisher, never()).publishTicketStatusChanged(any());
+  }
+
+  @Test
   void itemNotFoundForGivenOrderThrowsItemNotFound() {
     when(itemRepository.lockByOrderIdAndItemId(orderId, itemId)).thenReturn(Optional.empty());
 
