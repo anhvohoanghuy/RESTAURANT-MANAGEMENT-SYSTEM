@@ -108,3 +108,7 @@ CANCEL-06 is closed: a whole-order cancellation now automatically refunds every 
 ---
 *Phase: 18-order-and-order-item-cancellation-with-compensation-release-*
 *Completed: 2026-07-10*
+
+## Self-Check: PASSED
+
+All 7 created/modified source files verified present on disk. All 5 task/summary commit hashes (`ee890f3`, `341b8ae`, `dc10c98`, `4d66d75`, `2a11fd0`) verified present in git log.
