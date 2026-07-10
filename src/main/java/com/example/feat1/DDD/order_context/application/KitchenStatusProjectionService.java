@@ -62,7 +62,9 @@ public class KitchenStatusProjectionService {
    * Explicit, ordinal-free rank of each {@link KitchenItemStatus}, mirroring the {@link
    * #FULFILLMENT_RANK} idiom above. {@link #deriveTargetStatus} compares these values instead of
    * {@code KitchenItemStatus.ordinal()} so reordering the enum's declaration can never silently
-   * change derivation (WR-05).
+   * change derivation (WR-05). {@code CANCELLED} is deliberately excluded: a voided item never
+   * participates in rank comparisons -- {@link #deriveTargetStatus} filters it out of the snapshot
+   * before any ranking runs (CR-01).
    */
   private static final Map<KitchenItemStatus, Integer> ITEM_RANK =
       Map.of(
@@ -144,18 +146,29 @@ public class KitchenStatusProjectionService {
     if (items == null || items.isEmpty()) {
       return null;
     }
-    if (items.stream().allMatch(item -> item.status() == KitchenItemStatus.COMPLETED)) {
+    // CANCELLED items are voided/non-participating (CR-01): they must never count toward
+    // "all served"/"all ready"/"all completed" aggregates, nor block progression, nor be ranked at
+    // all. Filter them out of the snapshot before any derivation runs.
+    List<ItemStatus> active =
+        items.stream().filter(item -> item.status() != KitchenItemStatus.CANCELLED).toList();
+    if (active.isEmpty()) {
+      // Every item on the ticket was voided -- nothing to derive a fulfillment status from. (A
+      // whole-order cancel already short-circuits earlier via the order.status == CANCELLED
+      // terminal guard in onTicketStatusChanged; this covers the ticket-only edge case.)
+      return null;
+    }
+    if (active.stream().allMatch(item -> item.status() == KitchenItemStatus.COMPLETED)) {
       return OrderStatus.COMPLETED;
     }
-    if (items.stream()
+    if (active.stream()
         .allMatch(item -> itemRank(item.status()) >= ITEM_RANK.get(KitchenItemStatus.SERVED))) {
       return OrderStatus.SERVED;
     }
-    if (items.stream()
+    if (active.stream()
         .allMatch(item -> itemRank(item.status()) >= ITEM_RANK.get(KitchenItemStatus.READY))) {
       return OrderStatus.READY;
     }
-    if (items.stream()
+    if (active.stream()
         .anyMatch(item -> itemRank(item.status()) >= ITEM_RANK.get(KitchenItemStatus.PREPARING))) {
       return OrderStatus.PREPARING;
     }
@@ -163,6 +176,10 @@ public class KitchenStatusProjectionService {
   }
 
   private int itemRank(KitchenItemStatus status) {
-    return ITEM_RANK.get(status);
+    // Defensive fail-safe (CR-01): getOrDefault instead of get() so any future unmapped
+    // KitchenItemStatus can never NPE on unboxing here, even if deriveTargetStatus's CANCELLED
+    // filter is ever bypassed or another terminal status is added without an ITEM_RANK entry.
+    // -1 sits below every real rank, so an unmapped status never satisfies a ">=" rank check.
+    return ITEM_RANK.getOrDefault(status, -1);
   }
 }

@@ -171,6 +171,36 @@ class KitchenStatusProjectionServiceTest {
   }
 
   @Test
+  void cancelledItemMixedWithReadySiblingDerivesReadyWithoutNpe() {
+    // CR-01 regression: a partially-cancelled ticket snapshot (a CANCELLED item alongside a
+    // still-progressing sibling on the same ticket) must not NPE when itemRank(CANCELLED) is
+    // looked up mid-derivation, and the CANCELLED item must not block/participate in the
+    // "all ready" aggregate that decides the sibling's advance.
+    OrderEntity order = orderWithStatus(OrderStatus.PREPARING);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(
+        event(
+            new ItemStatus(lineId, KitchenItemStatus.CANCELLED),
+            new ItemStatus(UUID.randomUUID(), KitchenItemStatus.READY)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.READY);
+  }
+
+  @Test
+  void allItemsCancelledDerivesNoProjectionAndOrderIsUntouched() {
+    // CR-01: if every item on the ticket snapshot is CANCELLED (nothing left to derive a
+    // fulfillment status from), the order must be left exactly as-is -- no exception, no
+    // regression, no accidental resurrection.
+    OrderEntity order = orderWithStatus(OrderStatus.CONFIRMED);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.CANCELLED)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+  }
+
+  @Test
   void duplicateEventIdIsNoOpAndNeverLoadsOrder() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(true);
 
