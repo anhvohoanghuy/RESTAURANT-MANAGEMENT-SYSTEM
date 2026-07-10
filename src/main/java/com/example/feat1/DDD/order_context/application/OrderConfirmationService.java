@@ -38,8 +38,12 @@ public class OrderConfirmationService {
   /** Ledger consumer identity for the order-side stock-result handler. */
   static final String CONSUMER_NAME = "order-stock-result";
 
-  /** Cap on the persisted rejection reason (T-17.1-18 / I-WR-04) — column is widened to match. */
-  static final int MAX_REASON_LEN = 60000;
+  /**
+   * Cap on the persisted rejection reason (T-17.1-18 / I-WR-04 / IN-03). Derives from the single
+   * authoritative constant on {@link OrderEntity} so the truncation cap and the column length can
+   * never drift apart.
+   */
+  static final int MAX_REASON_LEN = OrderEntity.REJECTION_REASON_MAX_LEN;
 
   private static final String TRUNCATION_SUFFIX = "... (truncated)";
 

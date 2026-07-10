@@ -16,6 +16,7 @@ import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProces
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -172,6 +173,40 @@ class KitchenStatusProjectionServiceTest {
     when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
 
     service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.PREPARING)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void itemRankPinsTheIntendedOrderingIndependentOfEnumDeclarationOrder() throws Exception {
+    // WR-05: deriveTargetStatus must depend on an explicit ITEM_RANK map, not
+    // KitchenItemStatus.ordinal(), so a future reorder of the enum's declaration cannot silently
+    // change status derivation. This test reads ITEM_RANK directly via reflection and asserts the
+    // INTENDED semantic ranking (QUEUED < PREPARING < READY < SERVED < COMPLETED) -- it does not
+    // consult KitchenItemStatus.ordinal() anywhere, so it keeps pinning the correct ranking even
+    // if the enum's declaration order is later changed.
+    java.lang.reflect.Field field =
+        KitchenStatusProjectionService.class.getDeclaredField("ITEM_RANK");
+    field.setAccessible(true);
+    Map<KitchenItemStatus, Integer> itemRank = (Map<KitchenItemStatus, Integer>) field.get(null);
+
+    List<KitchenItemStatus> intendedOrder =
+        List.of(
+            KitchenItemStatus.QUEUED,
+            KitchenItemStatus.PREPARING,
+            KitchenItemStatus.READY,
+            KitchenItemStatus.SERVED,
+            KitchenItemStatus.COMPLETED);
+
+    assertThat(itemRank.keySet()).containsExactlyInAnyOrderElementsOf(intendedOrder);
+    for (int i = 0; i < intendedOrder.size() - 1; i++) {
+      int lower = itemRank.get(intendedOrder.get(i));
+      int higher = itemRank.get(intendedOrder.get(i + 1));
+      assertThat(higher)
+          .as(
+              "rank(%s) should be strictly less than rank(%s)",
+              intendedOrder.get(i), intendedOrder.get(i + 1))
+          .isGreaterThan(lower);
+    }
   }
 
   private OrderEntity orderWithStatus(OrderStatus status) {
