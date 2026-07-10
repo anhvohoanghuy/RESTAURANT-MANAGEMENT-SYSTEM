@@ -82,6 +82,9 @@ public class KitchenTicketAdvanceService {
       case READY -> target == KitchenItemStatus.SERVED;
       case SERVED -> target == KitchenItemStatus.COMPLETED;
       case COMPLETED -> false;
+        // A voided item is terminal: never advanceable (18-06 / D-7), closing the cancel-vs-advance
+        // race that would otherwise fire a rogue SettleTrigger for a released line.
+      case CANCELLED -> false;
     };
   }
 
