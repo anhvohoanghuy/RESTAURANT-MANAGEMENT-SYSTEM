@@ -177,6 +177,21 @@ class OrderConfirmationServiceTest {
     verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
   }
 
+  @Test
+  void cancelledOrderIsNotResurrectedByStaleStockResult() {
+    // CANCEL-07 regression: a stale stock-result for an already-CANCELLED order must be ignored.
+    // The existing `status != PENDING_CONFIRMATION` guard already covers this -- this test locks
+    // the behavior in without any production change to OrderConfirmationService.
+    OrderEntity order = orderWithStatus(OrderStatus.CANCELLED);
+    when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onStockResult(confirmedEvent());
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
+  }
+
   private OrderEntity orderWithStatus(OrderStatus status) {
     OrderEntity order = new OrderEntity();
     order.setId(orderId);

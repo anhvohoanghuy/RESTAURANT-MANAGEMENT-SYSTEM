@@ -30,10 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
  * while even one item is still preparing).
  *
  * <p>Guards against Kafka redelivery/reordering (T-17-17): a derived status is only applied when it
- * strictly increases {@link #FULFILLMENT_RANK} versus the order's current status, and a REJECTED
- * order (terminal, D-11) is never modified regardless of the incoming snapshot. Idempotency is
- * guarded by the shared {@code order_processed_events} ledger, reusing the same
- * insert+flush-then-catch-unique-violation pattern as {@link OrderConfirmationService} (T-17-19).
+ * strictly increases {@link #FULFILLMENT_RANK} versus the order's current status, and a REJECTED or
+ * CANCELLED order (terminal, D-11 / CANCEL-07) is never modified regardless of the incoming
+ * snapshot. Idempotency is guarded by the shared {@code order_processed_events} ledger, reusing the
+ * same insert+flush-then-catch-unique-violation pattern as {@link OrderConfirmationService}
+ * (T-17-19).
  */
 @Service
 @RequiredArgsConstructor
@@ -90,8 +91,9 @@ public class KitchenStatusProjectionService {
     }
     OrderEntity order = maybeOrder.get();
 
-    // (3) REJECTED is terminal (D-11) -- kitchen fulfillment progress never resurrects it.
-    if (order.getStatus() == OrderStatus.REJECTED) {
+    // (3) REJECTED and CANCELLED are terminal (D-11, CANCEL-07) -- kitchen fulfillment progress
+    // never resurrects either of them.
+    if (order.getStatus() == OrderStatus.REJECTED || order.getStatus() == OrderStatus.CANCELLED) {
       return;
     }
 

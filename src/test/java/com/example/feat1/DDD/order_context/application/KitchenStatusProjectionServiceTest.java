@@ -159,6 +159,18 @@ class KitchenStatusProjectionServiceTest {
   }
 
   @Test
+  void cancelledOrderIsNeverModified() {
+    // CANCEL-07: a CANCELLED order is terminal exactly like REJECTED -- a late fulfillment
+    // snapshot must never resurrect it with a fulfillment status.
+    OrderEntity order = orderWithStatus(OrderStatus.CANCELLED);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.COMPLETED)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+  }
+
+  @Test
   void duplicateEventIdIsNoOpAndNeverLoadsOrder() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(true);
 
