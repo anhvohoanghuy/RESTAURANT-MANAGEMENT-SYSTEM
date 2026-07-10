@@ -433,3 +433,13 @@ Plans:
 **Wave 2** *(blocked on Wave 1)*
 - [x] 17.1-06-PLAN.md — order-side saga outbox cutover + OrderLedgerWriter adoption + rejection_reason TEXT/truncation (I-WR-02, I-WR-01, I-WR-04)
 - [x] 17.1-07-PLAN.md — inventory-side saga outbox cutover + InventoryLedgerWriter adoption (I-WR-02, I-WR-01)
+
+### Phase 18: Order and order-item cancellation with compensation (release inventory reservation + auto refund)
+
+**Goal:** Add a cancellation capability for both a whole order and individual order items, with cross-context compensation. An order (or item) may be cancelled ONLY before the kitchen starts — while the order is `SUBMITTED`, `PENDING_CONFIRMATION`, or `CONFIRMED` (never once `PREPARING`+); partial cancel is limited to items not yet `PREPARING`. Both a customer (their OWN order, early states, ownership-checked) and staff/ADMIN (any order within the window) can cancel. Cancelling adds a terminal `CANCELLED` order status (and per-item cancel), releases any held Inventory reservation (`reserved → available`) for the cancelled scope, recomputes the order total on partial cancel, and — for a paid order — automatically triggers a Payment refund for the amount already paid via the existing transactional-outbox / idempotent-consumer event pattern (no synchronous cross-context call). The Maven suite stays green; no new dependencies.
+**Requirements**: Cancel window guard (SUBMITTED/PENDING_CONFIRMATION/CONFIRMED only); customer-own + staff/ADMIN authorization; whole-order cancel endpoint; partial item-cancel endpoint (non-PREPARING items only) with total recompute; Inventory reservation release on cancel (idempotent); automatic Payment refund on cancel of a paid order (event-driven); CANCELLED terminal status + state-machine/idempotency guards.
+**Depends on:** Phase 11 (payment-checkout / refund), Phase 16 (inventory-reservation-settlement), Phase 17 (kitchen status — defines the PREPARING boundary)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 18 to break down)

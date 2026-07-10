@@ -66,6 +66,7 @@ stopped_at: Phase 17.2 complete (6/6) — ready to discuss Phase 999.1
 - Phase 16 RE-SCOPED (2026-07-07) for cleaner architecture: split into two boundaries. Phase 16 is now **inventory-reservation-settlement** — a pure Inventory settlement consumer (re-resolve line recipe → deduct reserved+on_hand, clamp≥0, CONSUMPTION audit movement, idempotent + DLT, WR-01/WR-02 fixes) reacting to a settle-trigger event. Phase 17 added: **kitchen-context** — a new bounded context (KitchenTicket aggregate, per-item preparing→ready→served→completed lifecycle, staff endpoint) that publishes the settle-trigger event and reflects fulfillment onto order status via event. The original Phase 16 plans/research/patterns were removed; Phase 16 CONTEXT rewritten and awaits re-plan.
 - Phase 17.1 inserted after Phase 17: kitchen-hardening: fix Phase 17 review findings WR-01/WR-02/WR-03/IN-01/02 (URGENT)
 - Phase 17.2 inserted after Phase 17: Outbox durability + messaging cleanup (remaining 17.1 review findings) (URGENT)
+- Phase 18 added (2026-07-10): Order & order-item cancellation with compensation. Locked decisions — cancel window = only before kitchen (SUBMITTED/PENDING_CONFIRMATION/CONFIRMED); actors = customer(own, early) + staff/ADMIN(any in window); refund = automatic event-driven Payment refund on paid order; partial cancel = non-PREPARING items only, release reservation + recompute total. New terminal CANCELLED status. Depends on Phases 11/16/17. Awaiting plan.
 
 ## Quick Tasks Completed
 
