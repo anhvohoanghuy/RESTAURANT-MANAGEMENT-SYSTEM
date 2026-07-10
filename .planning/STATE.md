@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 17.2
 status: ready_to_plan
-last_updated: 2026-07-10T02:59:58.857Z
-last_activity: 2026-07-10
+last_updated: 2026-07-10T03:20:00.000Z
+last_activity: 2026-07-10 - Completed quick task 260710-e78: fix 4 minor 17.2-review findings
 progress:
   total_phases: 19
   completed_phases: 17
@@ -66,6 +66,12 @@ stopped_at: Phase 17.2 complete (6/6) — ready to discuss Phase 999.1
 - Phase 16 RE-SCOPED (2026-07-07) for cleaner architecture: split into two boundaries. Phase 16 is now **inventory-reservation-settlement** — a pure Inventory settlement consumer (re-resolve line recipe → deduct reserved+on_hand, clamp≥0, CONSUMPTION audit movement, idempotent + DLT, WR-01/WR-02 fixes) reacting to a settle-trigger event. Phase 17 added: **kitchen-context** — a new bounded context (KitchenTicket aggregate, per-item preparing→ready→served→completed lifecycle, staff endpoint) that publishes the settle-trigger event and reflects fulfillment onto order status via event. The original Phase 16 plans/research/patterns were removed; Phase 16 CONTEXT rewritten and awaits re-plan.
 - Phase 17.1 inserted after Phase 17: kitchen-hardening: fix Phase 17 review findings WR-01/WR-02/WR-03/IN-01/02 (URGENT)
 - Phase 17.2 inserted after Phase 17: Outbox durability + messaging cleanup (remaining 17.1 review findings) (URGENT)
+
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260710-e78 | Fix 4 minor findings from 17.2-REVIEW.md (WR-02 batch try/catch, WR-05 interrupt flag, IN-01 ttlDays guard, WR-03 @Lob rejection_reason) | 2026-07-10 | 0825bc2 | [260710-e78-fix-4-minor-findings-from-17-2-review-md](./quick/260710-e78-fix-4-minor-findings-from-17-2-review-md/) |
 
 ## Decisions
 
