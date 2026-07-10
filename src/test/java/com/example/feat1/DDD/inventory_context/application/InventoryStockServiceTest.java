@@ -156,6 +156,40 @@ class InventoryStockServiceTest {
   }
 
   @Test
+  void reservationReleaseIsRejectedAndBalanceUntouched() {
+    // CR-03 regression: RESERVATION_RELEASE is neither inbound, outbound, nor a count -- it must
+    // be rejected outright rather than silently falling into the STOCK_COUNT absolute-set path
+    // and overwriting quantityOnHand with whatever quantity a staff member submits.
+    UUID ingredientId = UUID.randomUUID();
+    IngredientEntity ingredient = ingredient(ingredientId, "g");
+    when(ingredientRepository.findById(ingredientId)).thenReturn(Optional.of(ingredient));
+    InventoryStockBalanceEntity balance = balance(ingredient, BigDecimal.valueOf(1000), null);
+    when(balanceRepository.findByIngredient_IdAndLocationCode(ingredientId, "DEFAULT"))
+        .thenReturn(Optional.of(balance));
+
+    assertThatThrownBy(
+            () ->
+                service.recordMovement(
+                    null,
+                    new StockMovementRequest(
+                        ingredientId,
+                        InventoryMovementType.RESERVATION_RELEASE,
+                        BigDecimal.valueOf(300),
+                        "g",
+                        null,
+                        null,
+                        null,
+                        null)))
+        .isInstanceOf(InventoryDomainException.class)
+        .extracting("code")
+        .isEqualTo(InventoryDomainException.MOVEMENT_INVALID);
+
+    assertThat(balance.getQuantityOnHand()).isEqualByComparingTo("1000");
+    verify(balanceRepository, never()).save(any());
+    verify(movementRepository, never()).save(any());
+  }
+
+  @Test
   void nonPositiveQuantityIsRejected() {
     UUID ingredientId = UUID.randomUUID();
     IngredientEntity ingredient = ingredient(ingredientId, "g");

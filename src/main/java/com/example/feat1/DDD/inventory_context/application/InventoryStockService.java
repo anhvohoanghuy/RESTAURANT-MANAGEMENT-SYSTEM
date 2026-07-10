@@ -78,10 +78,17 @@ public class InventoryStockService {
       }
       delta = baseQuantity.negate();
       resulting = current.add(delta);
-    } else {
+    } else if (type.isCount()) {
       // STOCK_COUNT: explicit correction path that sets on-hand to the counted quantity.
       resulting = baseQuantity;
       delta = resulting.subtract(current);
+    } else {
+      // Fail-closed (CR-03): any movement type that is neither inbound, outbound, nor a count
+      // (e.g. RESERVATION_RELEASE, which is audit-only and must decrement reservedQuantity ONLY,
+      // never quantityOnHand) must never fall through to the STOCK_COUNT absolute-set path -- that
+      // would silently overwrite quantityOnHand with whatever quantity was submitted.
+      throw InventoryDomainException.movementInvalid(
+          "Movement type not permitted via manual stock movement: " + type);
     }
     delta = scale(delta);
     resulting = scale(resulting);

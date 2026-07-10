@@ -11,5 +11,6 @@ public enum OrderStatus {
   READY,
   SERVED,
   COMPLETED,
-  REJECTED
+  REJECTED,
+  CANCELLED
 }

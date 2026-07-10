@@ -16,6 +16,7 @@ import com.example.feat1.DDD.order_context.infrastructure.repository.OrderProces
 import com.example.feat1.DDD.order_context.infrastructure.repository.OrderRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -158,6 +159,48 @@ class KitchenStatusProjectionServiceTest {
   }
 
   @Test
+  void cancelledOrderIsNeverModified() {
+    // CANCEL-07: a CANCELLED order is terminal exactly like REJECTED -- a late fulfillment
+    // snapshot must never resurrect it with a fulfillment status.
+    OrderEntity order = orderWithStatus(OrderStatus.CANCELLED);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.COMPLETED)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+  }
+
+  @Test
+  void cancelledItemMixedWithReadySiblingDerivesReadyWithoutNpe() {
+    // CR-01 regression: a partially-cancelled ticket snapshot (a CANCELLED item alongside a
+    // still-progressing sibling on the same ticket) must not NPE when itemRank(CANCELLED) is
+    // looked up mid-derivation, and the CANCELLED item must not block/participate in the
+    // "all ready" aggregate that decides the sibling's advance.
+    OrderEntity order = orderWithStatus(OrderStatus.PREPARING);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(
+        event(
+            new ItemStatus(lineId, KitchenItemStatus.CANCELLED),
+            new ItemStatus(UUID.randomUUID(), KitchenItemStatus.READY)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.READY);
+  }
+
+  @Test
+  void allItemsCancelledDerivesNoProjectionAndOrderIsUntouched() {
+    // CR-01: if every item on the ticket snapshot is CANCELLED (nothing left to derive a
+    // fulfillment status from), the order must be left exactly as-is -- no exception, no
+    // regression, no accidental resurrection.
+    OrderEntity order = orderWithStatus(OrderStatus.CONFIRMED);
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.CANCELLED)));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+  }
+
+  @Test
   void duplicateEventIdIsNoOpAndNeverLoadsOrder() {
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(true);
 
@@ -172,6 +215,40 @@ class KitchenStatusProjectionServiceTest {
     when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
 
     service.onTicketStatusChanged(event(new ItemStatus(lineId, KitchenItemStatus.PREPARING)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void itemRankPinsTheIntendedOrderingIndependentOfEnumDeclarationOrder() throws Exception {
+    // WR-05: deriveTargetStatus must depend on an explicit ITEM_RANK map, not
+    // KitchenItemStatus.ordinal(), so a future reorder of the enum's declaration cannot silently
+    // change status derivation. This test reads ITEM_RANK directly via reflection and asserts the
+    // INTENDED semantic ranking (QUEUED < PREPARING < READY < SERVED < COMPLETED) -- it does not
+    // consult KitchenItemStatus.ordinal() anywhere, so it keeps pinning the correct ranking even
+    // if the enum's declaration order is later changed.
+    java.lang.reflect.Field field =
+        KitchenStatusProjectionService.class.getDeclaredField("ITEM_RANK");
+    field.setAccessible(true);
+    Map<KitchenItemStatus, Integer> itemRank = (Map<KitchenItemStatus, Integer>) field.get(null);
+
+    List<KitchenItemStatus> intendedOrder =
+        List.of(
+            KitchenItemStatus.QUEUED,
+            KitchenItemStatus.PREPARING,
+            KitchenItemStatus.READY,
+            KitchenItemStatus.SERVED,
+            KitchenItemStatus.COMPLETED);
+
+    assertThat(itemRank.keySet()).containsExactlyInAnyOrderElementsOf(intendedOrder);
+    for (int i = 0; i < intendedOrder.size() - 1; i++) {
+      int lower = itemRank.get(intendedOrder.get(i));
+      int higher = itemRank.get(intendedOrder.get(i + 1));
+      assertThat(higher)
+          .as(
+              "rank(%s) should be strictly less than rank(%s)",
+              intendedOrder.get(i), intendedOrder.get(i + 1))
+          .isGreaterThan(lower);
+    }
   }
 
   private OrderEntity orderWithStatus(OrderStatus status) {

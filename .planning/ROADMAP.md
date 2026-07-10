@@ -397,6 +397,23 @@ Plans:
 
 - [x] 17-06-PLAN.md — staff REST endpoints: PATCH advance + GET kitchen board under /admin/orders/** (D-05)
 
+### Phase 17.2: Outbox durability + messaging cleanup: resolve remaining non-blocking 17.1 review findings (WR-01 outbox wire-format round-trip + integration test, WR-02 relay per-row transaction, WR-03 delete dead publishers, IN-02 outbox retention + FAILED alerting, IN-03 unify reason-length constant, WR-05 explicit fulfillment rank map, WR-06 externalize DB credentials) (INSERTED)
+
+**Goal:** Resolve the remaining non-blocking robustness/hygiene findings deferred from Phase 17.1's review — durable-outbox wire-format round-trip coverage (WR-01), relay per-row transactions to bound duplicate-publish blast radius (WR-02), deletion of dead direct-publish adapters (WR-03), outbox retention + FAILED-row surfacing (IN-02), a unified rejection-reason cap constant (IN-03), an explicit ordinal-free kitchen fulfillment rank map (WR-05), and externalized DB credentials (WR-06). No new features, no new dependencies; the 207-test suite stays green and Phase 17.1's 21 verified truths (incl. the CR-01 transactional-ledger fix) must not regress.
+**Requirements**: [WR-01, WR-02, WR-03, IN-02, IN-03, WR-05, WR-06]
+**Depends on:** Phase 17
+**Plans:** 6/6 plans complete
+
+Plans:
+
+**Wave 1** *(all six plans touch disjoint files — fully parallel)*
+- [x] 17.2-01-PLAN.md — WR-01 outbox wire-format round-trip test + mapper alignment (Instant/BigDecimal)
+- [x] 17.2-02-PLAN.md — WR-02 relay per-row transaction (OutboxRowPublisher) + sibling-isolation test
+- [x] 17.2-03-PLAN.md — IN-02 outbox retention job + FAILED-row surfacing + tests
+- [x] 17.2-04-PLAN.md — WR-03 delete dead order/inventory publishers, ports, and producer configs
+- [x] 17.2-05-PLAN.md — IN-03 unified rejection-reason constant + WR-05 explicit kitchen rank map
+- [x] 17.2-06-PLAN.md — WR-06 externalize DB credentials to env placeholders
+
 ### Phase 17.1: kitchen-hardening — Fix Phase 17 review findings: WR-01 add whenComplete callback + error logging to kitchen Kafka publishers so failed sends aren't silently lost; WR-02 persist actorId + timestamp on item advance for audit trail; WR-03 make KitchenStatusProjectionService fail-closed on unknown fulfillment rank; IN-01/02 use existsByOrderId to absorb same-order OrderConfirmed under new eventId instead of DLT (INSERTED)
 
 **Goal:** Close the outstanding robustness/quality debt from the Phase 15 and Phase 17 code reviews across the Kitchen and Inventory/Order bounded contexts — durable messaging (whenComplete + a full transactional outbox for the three saga events), advance audit trail, fail-closed status projection, REQUIRES_NEW ledger idempotency, rejection_reason overflow fix, and the global Jackson-3 serializer switch. No new features, no new dependencies; existing 156-test suite stays green.
@@ -417,22 +434,23 @@ Plans:
 - [x] 17.1-06-PLAN.md — order-side saga outbox cutover + OrderLedgerWriter adoption + rejection_reason TEXT/truncation (I-WR-02, I-WR-01, I-WR-04)
 - [x] 17.1-07-PLAN.md — inventory-side saga outbox cutover + InventoryLedgerWriter adoption (I-WR-02, I-WR-01)
 
-### Phase 17.2: inventory-settlement-idempotency-hardening — Fix Phase 16 settlement REQUIRES_NEW ledger pre-commit anti-pattern (INSERTED)
+### Phase 18: Order and order-item cancellation with compensation (release inventory reservation + auto refund)
 
-**Goal:** Fix the remaining Phase 16 settlement idempotency anti-pattern by removing the pre-committed `REQUIRES_NEW` inventory ledger writer from `InventoryReservationSettlementService` and recording the processed-event row last, in the same transaction as the settlement mutation.
-**Requirements**: [D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09]
-**Depends on:** Phase 17.1
-**Plans:** 1/1 plans complete
-
-Plans:
-- [x] 17.2-01-PLAN.md — Move settlement processed-event ledger insert to final same-transaction step and delete obsolete `InventoryLedgerWriter`
-
-### Phase 17.3: payment-table-kafka-jackson3-serializer-hardening - Fix Payment/Table Kafka producer configs still using legacy JsonSerializer after global Jackson-3 switch (INSERTED)
-
-**Goal:** Close the latent runtime risk where dedicated Payment/Table Kafka producer factories still override the global Jackson-3 producer serializer with legacy `JsonSerializer`, which can fail for event payloads containing `Instant`.
-**Requirements**: [D-01, D-02, D-03, D-04, D-05, D-06, D-07]
-**Depends on:** Phase 17.2
-**Plans:** 1/1 plans complete
+**Goal:** Add a cancellation capability for both a whole order and individual order items, with cross-context compensation. An order (or item) may be cancelled ONLY before the kitchen starts — while the order is `SUBMITTED`, `PENDING_CONFIRMATION`, or `CONFIRMED` (never once `PREPARING`+); partial cancel is limited to items not yet `PREPARING`. Both a customer (their OWN order, early states, ownership-checked) and staff/ADMIN (any order within the window) can cancel. Cancelling adds a terminal `CANCELLED` order status (and per-item cancel), releases any held Inventory reservation (`reserved → available`) for the cancelled scope, recomputes the order total on partial cancel, and — for a paid order — automatically triggers a Payment refund for the amount already paid via the existing transactional-outbox / idempotent-consumer event pattern (no synchronous cross-context call). The Maven suite stays green; no new dependencies.
+**Requirements**: Cancel window guard (SUBMITTED/PENDING_CONFIRMATION/CONFIRMED only); customer-own + staff/ADMIN authorization; whole-order cancel endpoint; partial item-cancel endpoint (non-PREPARING items only) with total recompute; Inventory reservation release on cancel (idempotent); automatic Payment refund on cancel of a paid order (event-driven); CANCELLED terminal status + state-machine/idempotency guards.
+**Depends on:** Phase 11 (payment-checkout / refund), Phase 16 (inventory-reservation-settlement), Phase 17 (kitchen status — defines the PREPARING boundary)
+**Plans:** 6/6 plans complete
 
 Plans:
-- [x] 17.3-01-PLAN.md - Align Payment/Table dedicated Kafka producers with Jackson-3 and add Instant serde/config regression guards
+
+**Wave 1**
+- [x] 18-01-PLAN.md — Foundation: append CANCELLED status + terminal guards, cancel error codes, OrderLineEntity.cancelledAt, OrderRepository.lockById, OrderCancelledEvent contract + topic (CANCEL-07)
+
+**Wave 2** *(all depend on 18-01; disjoint contexts, fully parallel)*
+- [x] 18-02-PLAN.md — order_context cancellation core: KitchenItemStatusPort/adapter + OrderCancellationService (window guard, ownership, race-safe kitchen read, partial recompute, outbox publish) (CANCEL-01/02/04)
+- [x] 18-03-PLAN.md — inventory reservation release consumer: inverse-of-settlement service, release ledger/enums, listener + DLT config (CANCEL-05)
+- [x] 18-04-PLAN.md — payment auto-refund consumer: Payment's first ledger + consumer, whole-order-gated refund reusing recordRefund (CANCEL-06)
+
+**Wave 3** *(depend on 18-02)*
+- [x] 18-05-PLAN.md — REST cancel endpoints (customer + admin) + authorization integration test (CANCEL-02/03/04)
+- [x] 18-06-PLAN.md — kitchen ticket void consumer: append CANCELLED status, guarded idempotent void, advance guard, listener + DLT config (CANCEL-08 / D-7)

@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -25,6 +26,15 @@ import lombok.Setter;
 @Entity
 @Table(name = "orders")
 public class OrderEntity {
+
+  /**
+   * Single source of truth for the persisted rejection-reason cap (IN-03 / T-17.1-18 / I-WR-04).
+   * {@link com.example.feat1.DDD.order_context.application.OrderConfirmationService#MAX_REASON_LEN}
+   * derives from this same constant so the truncation cap and the column length can never drift
+   * apart.
+   */
+  public static final int REJECTION_REASON_MAX_LEN = 60000;
+
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
@@ -36,7 +46,8 @@ public class OrderEntity {
   @Column(nullable = false)
   private OrderStatus status = OrderStatus.PENDING_CONFIRMATION;
 
-  @Column(name = "rejection_reason", length = 65535)
+  @Lob
+  @Column(name = "rejection_reason")
   private String rejectionReason;
 
   @Column(name = "submitted_at", nullable = false)
