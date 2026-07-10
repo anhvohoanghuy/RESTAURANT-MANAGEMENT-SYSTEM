@@ -11,6 +11,9 @@ public class OrderDomainException extends AppException {
   public static final String CART_EMPTY = "ORDER_CART_EMPTY";
   public static final String CART_TABLE_REQUIRED = "ORDER_CART_TABLE_REQUIRED";
   public static final String ORDER_NOT_FOUND = "ORDER_NOT_FOUND";
+  public static final String CANCEL_WINDOW_CLOSED = "ORDER_CANCEL_WINDOW_CLOSED";
+  public static final String LINE_NOT_CANCELLABLE = "ORDER_LINE_NOT_CANCELLABLE";
+  public static final String NO_CANCELLABLE_LINES = "ORDER_NO_CANCELLABLE_LINES";
 
   public OrderDomainException(String code, String message, HttpStatus status) {
     super(code, message, status);
@@ -48,5 +51,22 @@ public class OrderDomainException extends AppException {
 
   public static OrderDomainException orderNotFound() {
     return new OrderDomainException(ORDER_NOT_FOUND, "Order was not found", HttpStatus.NOT_FOUND);
+  }
+
+  public static OrderDomainException cancelWindowClosed() {
+    return new OrderDomainException(
+        CANCEL_WINDOW_CLOSED,
+        "Order can no longer be cancelled once kitchen preparation has started",
+        HttpStatus.BAD_REQUEST);
+  }
+
+  public static OrderDomainException lineNotCancellable() {
+    return new OrderDomainException(
+        LINE_NOT_CANCELLABLE, "Order line can no longer be cancelled", HttpStatus.BAD_REQUEST);
+  }
+
+  public static OrderDomainException noCancellableLines() {
+    return new OrderDomainException(
+        NO_CANCELLABLE_LINES, "No cancellable lines were provided", HttpStatus.BAD_REQUEST);
   }
 }
