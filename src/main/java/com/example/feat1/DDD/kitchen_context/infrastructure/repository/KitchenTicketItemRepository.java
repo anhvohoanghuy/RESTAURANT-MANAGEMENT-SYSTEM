@@ -25,4 +25,13 @@ public interface KitchenTicketItemRepository extends JpaRepository<KitchenTicket
   Optional<KitchenTicketItemEntity> lockByOrderIdAndItemId(UUID orderId, UUID id);
 
   List<KitchenTicketItemEntity> findByStatusNot(KitchenItemStatus status);
+
+  /**
+   * Non-locking read of every kitchen item across all tickets for an order, keyed indirectly by
+   * {@code orderLineId} on each returned entity. Used by {@link
+   * com.example.feat1.DDD.kitchen_context.infrastructure.adapter.KitchenItemStatusAdapter} for the
+   * order_context race-safe PREPARING guard (plan 18-02) — deliberately does NOT lock, since it is
+   * a read-only cross-context snapshot taken inside the CALLER's already-locked order transaction.
+   */
+  List<KitchenTicketItemEntity> findByTicket_OrderId(UUID orderId);
 }
