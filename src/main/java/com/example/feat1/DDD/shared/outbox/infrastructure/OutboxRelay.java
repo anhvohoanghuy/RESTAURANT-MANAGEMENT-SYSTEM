@@ -25,6 +25,13 @@ import org.springframework.stereotype.Component;
  * transaction (WR-02). A slow or failed send on one claimed row can no longer roll back sibling
  * rows in the same batch that were already sent and marked {@code SENT}, bounding duplicate-publish
  * amplification on the next poll to at most the single in-flight row instead of the whole batch.
+ *
+ * <p>This relay runs in a single-instance topology today (one {@code @Scheduled(fixedDelay)}
+ * poller), so {@code SKIP LOCKED} in {@link OutboxEventRepository#claimPending} never has to
+ * contend with a concurrent poller and no cross-instance double-claim can occur in practice. It
+ * does NOT by itself guarantee cross-instance no-double-publish safety if a second instance is ever
+ * introduced; delivery is at-least-once, and the idempotent {@code order_processed_events} consumer
+ * ledger is what bounds the impact of any duplicate publish in that scenario.
  */
 @Component
 @RequiredArgsConstructor
