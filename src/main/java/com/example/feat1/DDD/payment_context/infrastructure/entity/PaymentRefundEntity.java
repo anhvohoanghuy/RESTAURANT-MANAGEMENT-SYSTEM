@@ -42,7 +42,7 @@ public class PaymentRefundEntity {
 
   private String reason;
 
-  @Column(name = "actor_user_id", nullable = false)
+  @Column(name = "actor_user_id")
   private UUID actorUserId;
 
   @Column(name = "created_at", nullable = false)
