@@ -637,7 +637,9 @@ for (PaymentEntity payment : payments) {
 | A4 | A new synchronous cross-context port (`KitchenItemStatusPort`) from order_context into kitchen_context is required to race-safely evaluate the per-item PREPARING guard, rather than trusting the projected `OrderEntity.status` | Pitfall 1 | If the planner instead trusts `OrderEntity.status` alone, the phase will pass tests written against that assumption but remain vulnerable to the exact cross-context race the phase brief explicitly asked to be investigated |
 | A5 | `PaymentRefundEntity.actorUserId` should become nullable for system-triggered refunds, using `null` rather than a sentinel "system" UUID | Pitfall 5 | Low risk - if the planner instead chooses a sentinel UUID, functionally equivalent, just a less honest audit trail; does not block the phase |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Resolved 2026-07-10 via user discussion → locked in 18-CONTEXT.md: Q1 → D-6 (whole-order-only refund), Q2 → D-7 (kitchen void consumer), Q3 → one-directional KitchenItemStatusPort read (18-02) + kitchen-void backstop (18-06).
 
 1. **Does refund automation (D-3) apply to partial-item-cancel of a paid order, or only
    whole-order cancel?**
