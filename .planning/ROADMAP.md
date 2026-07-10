@@ -402,17 +402,17 @@ Plans:
 **Goal:** Resolve the remaining non-blocking robustness/hygiene findings deferred from Phase 17.1's review — durable-outbox wire-format round-trip coverage (WR-01), relay per-row transactions to bound duplicate-publish blast radius (WR-02), deletion of dead direct-publish adapters (WR-03), outbox retention + FAILED-row surfacing (IN-02), a unified rejection-reason cap constant (IN-03), an explicit ordinal-free kitchen fulfillment rank map (WR-05), and externalized DB credentials (WR-06). No new features, no new dependencies; the 207-test suite stays green and Phase 17.1's 21 verified truths (incl. the CR-01 transactional-ledger fix) must not regress.
 **Requirements**: [WR-01, WR-02, WR-03, IN-02, IN-03, WR-05, WR-06]
 **Depends on:** Phase 17
-**Plans:** 6 plans
+**Plans:** 6/6 plans complete
 
 Plans:
 
 **Wave 1** *(all six plans touch disjoint files — fully parallel)*
-- [ ] 17.2-01-PLAN.md — WR-01 outbox wire-format round-trip test + mapper alignment (Instant/BigDecimal)
-- [ ] 17.2-02-PLAN.md — WR-02 relay per-row transaction (OutboxRowPublisher) + sibling-isolation test
-- [ ] 17.2-03-PLAN.md — IN-02 outbox retention job + FAILED-row surfacing + tests
-- [ ] 17.2-04-PLAN.md — WR-03 delete dead order/inventory publishers, ports, and producer configs
-- [ ] 17.2-05-PLAN.md — IN-03 unified rejection-reason constant + WR-05 explicit kitchen rank map
-- [ ] 17.2-06-PLAN.md — WR-06 externalize DB credentials to env placeholders
+- [x] 17.2-01-PLAN.md — WR-01 outbox wire-format round-trip test + mapper alignment (Instant/BigDecimal)
+- [x] 17.2-02-PLAN.md — WR-02 relay per-row transaction (OutboxRowPublisher) + sibling-isolation test
+- [x] 17.2-03-PLAN.md — IN-02 outbox retention job + FAILED-row surfacing + tests
+- [x] 17.2-04-PLAN.md — WR-03 delete dead order/inventory publishers, ports, and producer configs
+- [x] 17.2-05-PLAN.md — IN-03 unified rejection-reason constant + WR-05 explicit kitchen rank map
+- [x] 17.2-06-PLAN.md — WR-06 externalize DB credentials to env placeholders
 
 ### Phase 17.1: kitchen-hardening — Fix Phase 17 review findings: WR-01 add whenComplete callback + error logging to kitchen Kafka publishers so failed sends aren't silently lost; WR-02 persist actorId + timestamp on item advance for audit trail; WR-03 make KitchenStatusProjectionService fail-closed on unknown fulfillment rank; IN-01/02 use existsByOrderId to absorb same-order OrderConfirmed under new eventId instead of DLT (INSERTED)
 
