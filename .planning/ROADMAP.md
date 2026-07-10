@@ -439,7 +439,7 @@ Plans:
 **Goal:** Add a cancellation capability for both a whole order and individual order items, with cross-context compensation. An order (or item) may be cancelled ONLY before the kitchen starts — while the order is `SUBMITTED`, `PENDING_CONFIRMATION`, or `CONFIRMED` (never once `PREPARING`+); partial cancel is limited to items not yet `PREPARING`. Both a customer (their OWN order, early states, ownership-checked) and staff/ADMIN (any order within the window) can cancel. Cancelling adds a terminal `CANCELLED` order status (and per-item cancel), releases any held Inventory reservation (`reserved → available`) for the cancelled scope, recomputes the order total on partial cancel, and — for a paid order — automatically triggers a Payment refund for the amount already paid via the existing transactional-outbox / idempotent-consumer event pattern (no synchronous cross-context call). The Maven suite stays green; no new dependencies.
 **Requirements**: Cancel window guard (SUBMITTED/PENDING_CONFIRMATION/CONFIRMED only); customer-own + staff/ADMIN authorization; whole-order cancel endpoint; partial item-cancel endpoint (non-PREPARING items only) with total recompute; Inventory reservation release on cancel (idempotent); automatic Payment refund on cancel of a paid order (event-driven); CANCELLED terminal status + state-machine/idempotency guards.
 **Depends on:** Phase 11 (payment-checkout / refund), Phase 16 (inventory-reservation-settlement), Phase 17 (kitchen status — defines the PREPARING boundary)
-**Plans:** 4/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 
@@ -452,5 +452,5 @@ Plans:
 - [x] 18-04-PLAN.md — payment auto-refund consumer: Payment's first ledger + consumer, whole-order-gated refund reusing recordRefund (CANCEL-06)
 
 **Wave 3** *(depend on 18-02)*
-- [ ] 18-05-PLAN.md — REST cancel endpoints (customer + admin) + authorization integration test (CANCEL-02/03/04)
-- [ ] 18-06-PLAN.md — kitchen ticket void consumer: append CANCELLED status, guarded idempotent void, advance guard, listener + DLT config (CANCEL-08 / D-7)
+- [x] 18-05-PLAN.md — REST cancel endpoints (customer + admin) + authorization integration test (CANCEL-02/03/04)
+- [x] 18-06-PLAN.md — kitchen ticket void consumer: append CANCELLED status, guarded idempotent void, advance guard, listener + DLT config (CANCEL-08 / D-7)
