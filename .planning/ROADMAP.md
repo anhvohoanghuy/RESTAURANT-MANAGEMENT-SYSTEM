@@ -454,3 +454,22 @@ Plans:
 **Wave 3** *(depend on 18-02)*
 - [x] 18-05-PLAN.md — REST cancel endpoints (customer + admin) + authorization integration test (CANCEL-02/03/04)
 - [x] 18-06-PLAN.md — kitchen ticket void consumer: append CANCELLED status, guarded idempotent void, advance guard, listener + DLT config (CANCEL-08 / D-7)
+
+### Phase 19: VueJS admin management interface
+
+**Goal:** Add a VueJS admin management interface that lets ADMIN/STAFF users sign in, keep the JWT session, and operate the existing backend admin surfaces from one work-focused dashboard: menu catalog, dining tables/table operations, inventory/costing/stock, payment history/refunds, kitchen board, and order cancellation/status workflows. The frontend should live as a separate Vite/Vue app in this repository, consume the Spring Boot API through a typed API client, and avoid backend behavior changes except for clearly identified API gaps.
+**Requirements**: [ADMIN-UI-001, ADMIN-UI-002, ADMIN-UI-003, ADMIN-UI-004, ADMIN-UI-005, ADMIN-UI-006]
+**Depends on:** Phase 18
+**Plans:** 0 plans
+
+**Success Criteria** (what must be TRUE):
+
+  1. ADMIN/STAFF users can log in through the Vue app, persist access/refresh tokens safely in client state/storage, refresh or recover from auth failures, and log out.
+  2. The admin dashboard exposes dense, scannable navigation for menu, table operations, inventory/stock, payments, kitchen board, and orders without a marketing/landing page.
+  3. Menu, table, inventory, payment, kitchen, and cancellation workflows call the existing backend endpoints with shared error/loading/empty states and role-aware affordances.
+  4. The app uses Vue 3 + Vite with a maintainable component/layout structure, typed API boundary, and environment-configured API base URL.
+  5. The implementation includes frontend verification for routing/auth guards/API-client behavior plus a documented manual smoke path against the Spring Boot backend.
+  6. Backend API gaps discovered while wiring the UI are documented as follow-up items instead of silently mocked as if complete.
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 19 to break down)
