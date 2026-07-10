@@ -26,6 +26,7 @@ import com.example.feat1.DDD.inventory_context.infrastructure.entity.InventorySt
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity;
 import com.example.feat1.DDD.inventory_context.infrastructure.entity.StockReservationEntity.ReservationStatus;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.IngredientRepository;
+import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryLineReleaseRepository;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryLineSettlementRepository;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryProcessedEventRepository;
 import com.example.feat1.DDD.inventory_context.infrastructure.repository.InventoryStockBalanceRepository;
@@ -48,6 +49,7 @@ class InventoryReservationSettlementServiceTest {
   private InventoryLedgerWriter ledgerWriter;
   private InventoryProcessedEventRepository processedEventRepository;
   private InventoryLineSettlementRepository lineSettlementRepository;
+  private InventoryLineReleaseRepository lineReleaseRepository;
   private StockReservationRepository reservationRepository;
   private InventoryStockBalanceRepository balanceRepository;
   private InventoryStockMovementRepository movementRepository;
@@ -61,6 +63,7 @@ class InventoryReservationSettlementServiceTest {
     ledgerWriter = mock(InventoryLedgerWriter.class);
     processedEventRepository = mock(InventoryProcessedEventRepository.class);
     lineSettlementRepository = mock(InventoryLineSettlementRepository.class);
+    lineReleaseRepository = mock(InventoryLineReleaseRepository.class);
     reservationRepository = mock(StockReservationRepository.class);
     balanceRepository = mock(InventoryStockBalanceRepository.class);
     movementRepository = mock(InventoryStockMovementRepository.class);
@@ -75,6 +78,7 @@ class InventoryReservationSettlementServiceTest {
             ledgerWriter,
             processedEventRepository,
             lineSettlementRepository,
+            lineReleaseRepository,
             reservationRepository,
             balanceRepository,
             movementRepository,
@@ -84,6 +88,7 @@ class InventoryReservationSettlementServiceTest {
     // Defaults: not processed, not settled, ledger insert succeeds, saves echo.
     when(processedEventRepository.existsByEventIdAndConsumerName(any(), any())).thenReturn(false);
     when(lineSettlementRepository.existsByOrderIdAndOrderLineId(any(), any())).thenReturn(false);
+    when(lineReleaseRepository.countByOrderId(any())).thenReturn(0L);
     when(ledgerWriter.tryInsert(any(), any())).thenReturn(true);
     when(balanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(movementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
