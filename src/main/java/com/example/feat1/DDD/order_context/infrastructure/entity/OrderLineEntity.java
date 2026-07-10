@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -60,4 +61,8 @@ public class OrderLineEntity {
 
   @Column(name = "line_total", nullable = false, precision = 12, scale = 2)
   private BigDecimal lineTotal;
+
+  /** Soft-cancel marker: set when this line is cancelled individually or as part of the order. */
+  @Column(name = "cancelled_at")
+  private Instant cancelledAt;
 }
