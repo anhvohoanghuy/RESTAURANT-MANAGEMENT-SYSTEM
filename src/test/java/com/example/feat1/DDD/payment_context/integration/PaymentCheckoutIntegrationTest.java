@@ -24,7 +24,6 @@ import com.example.feat1.DDD.menu_context.application.dto.MenuDtos.DishRequest;
 import com.example.feat1.DDD.menu_context.application.dto.MenuDtos.ToppingGroupRequest;
 import com.example.feat1.DDD.menu_context.application.dto.MenuDtos.ToppingOptionRequest;
 import com.example.feat1.DDD.menu_context.domain.model.MenuStatus;
-import com.example.feat1.DDD.order_context.domain.port.OrderEventPublisher;
 import com.example.feat1.DDD.payment_context.application.event.PaymentEvent;
 import com.example.feat1.DDD.payment_context.domain.port.PaymentEventPublisher;
 import com.example.feat1.DDD.table_context.application.TableCatalogService;
@@ -67,7 +66,6 @@ class PaymentCheckoutIntegrationTest {
   @MockitoBean private EmailNotificationPort emailNotificationPort;
   @MockitoBean private AuthRateLimitService authRateLimitService;
   @MockitoBean private LoginLockoutService loginLockoutService;
-  @MockitoBean private OrderEventPublisher orderEventPublisher;
   @MockitoBean private PaymentEventPublisher paymentEventPublisher;
 
   @Test
