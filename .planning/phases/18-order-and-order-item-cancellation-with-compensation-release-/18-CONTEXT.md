@@ -44,6 +44,30 @@ cross-context calls; no new dependencies; Maven suite stays green.
 - Items already PREPARING/settled are NOT cancellable in this phase (blocked, not
   force-cancelled).
 
+### D-5 Refund delivery mechanism
+- **Event-driven** (locked, confirmed after research surfaced that Payment has no
+  consumer infra today). Order publishes a cancel/refund-requested event via the
+  transactional outbox; **Payment gains its FIRST Kafka consumer + a processed-events
+  idempotency ledger** (built from scratch this phase, mirroring the order/inventory
+  ledger + DLT convention) to apply the refund. No synchronous cross-context call.
+- Note: this is a larger lift than a simple trigger — building Payment's first consumer
+  and ledger is explicitly in scope.
+
+### D-6 Partial-cancel refund scope
+- Auto-refund applies to **whole-order cancel ONLY**. Partial item-cancel of a paid
+  order does **NOT** auto-refund the delta — it only releases the cancelled items'
+  reservation and recomputes the order total; any owed refund is left for staff to
+  handle manually (avoids delta-refund complexity; orders before PREPARING are usually
+  unpaid anyway).
+
+### D-7 Kitchen ticket invalidation on cancel
+- **Yes** — Kitchen Context consumes the cancel event and **voids/cancels the
+  corresponding ticket item(s)**, so staff cannot later advance an already-cancelled
+  line (which would otherwise fire a settlement that deducts stock already released).
+  This closes the cancel-vs-kitchen-advance race. Idempotent consumer, same ledger/DLT
+  pattern. (Cancel window is still bounded to pre-PREPARING per D-1; this consumer is
+  the defensive backstop for the create→confirm→ticket race.)
+
 ### Claude's Discretion
 - Exact new endpoint paths/verbs, DTO shapes, and whether whole-order cancel is
   modelled as "cancel all remaining cancellable items" vs a distinct order-level
