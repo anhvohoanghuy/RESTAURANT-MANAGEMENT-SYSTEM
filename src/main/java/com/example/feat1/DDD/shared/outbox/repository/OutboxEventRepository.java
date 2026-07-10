@@ -40,7 +40,7 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEventEntity, 
    * status} so PENDING/FAILED rows are never deleted regardless of age (T-17.2-07). Returns the
    * number of rows removed.
    */
-  @Modifying
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("DELETE FROM OutboxEventEntity e WHERE e.status = :status AND e.createdAt < :cutoff")
   int deleteByStatusAndCreatedAtBefore(
       @Param("status") String status, @Param("cutoff") Instant cutoff);
