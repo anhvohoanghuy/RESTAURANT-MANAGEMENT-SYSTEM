@@ -57,6 +57,20 @@ public class KitchenStatusProjectionService {
           OrderStatus.SERVED, 3,
           OrderStatus.COMPLETED, 4);
 
+  /**
+   * Explicit, ordinal-free rank of each {@link KitchenItemStatus}, mirroring the {@link
+   * #FULFILLMENT_RANK} idiom above. {@link #deriveTargetStatus} compares these values instead of
+   * {@code KitchenItemStatus.ordinal()} so reordering the enum's declaration can never silently
+   * change derivation (WR-05).
+   */
+  private static final Map<KitchenItemStatus, Integer> ITEM_RANK =
+      Map.of(
+          KitchenItemStatus.QUEUED, 0,
+          KitchenItemStatus.PREPARING, 1,
+          KitchenItemStatus.READY, 2,
+          KitchenItemStatus.SERVED, 3,
+          KitchenItemStatus.COMPLETED, 4);
+
   private final OrderProcessedEventRepository processedEventRepository;
   private final OrderRepository orderRepository;
 
@@ -132,17 +146,21 @@ public class KitchenStatusProjectionService {
       return OrderStatus.COMPLETED;
     }
     if (items.stream()
-        .allMatch(item -> item.status().ordinal() >= KitchenItemStatus.SERVED.ordinal())) {
+        .allMatch(item -> itemRank(item.status()) >= ITEM_RANK.get(KitchenItemStatus.SERVED))) {
       return OrderStatus.SERVED;
     }
     if (items.stream()
-        .allMatch(item -> item.status().ordinal() >= KitchenItemStatus.READY.ordinal())) {
+        .allMatch(item -> itemRank(item.status()) >= ITEM_RANK.get(KitchenItemStatus.READY))) {
       return OrderStatus.READY;
     }
     if (items.stream()
-        .anyMatch(item -> item.status().ordinal() >= KitchenItemStatus.PREPARING.ordinal())) {
+        .anyMatch(item -> itemRank(item.status()) >= ITEM_RANK.get(KitchenItemStatus.PREPARING))) {
       return OrderStatus.PREPARING;
     }
     return null;
+  }
+
+  private int itemRank(KitchenItemStatus status) {
+    return ITEM_RANK.get(status);
   }
 }
