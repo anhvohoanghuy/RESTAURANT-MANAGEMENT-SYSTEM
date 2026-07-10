@@ -87,7 +87,12 @@ public class InventoryReservationReleaseService {
   public void onOrderCancelled(OrderCancelledEvent event) {
     UUID eventId = event.eventId();
     UUID orderId = event.orderId();
-    List<UUID> cancelledLineIds = event.cancelledLineIds();
+    // WR-01: cancelledLineIds is nullable by the record's own type (and by the Jackson-3
+    // deserializer's default handling of an absent/null JSON field on a poison or
+    // schema-drifted payload) -- treat null as empty, mirroring
+    // KitchenTicketInvalidationService's guard on the same field.
+    List<UUID> cancelledLineIds =
+        event.cancelledLineIds() == null ? List.of() : event.cancelledLineIds();
 
     // (1) Two independent idempotency guards. The eventId ledger catches a replayed delivery of
     // this exact event; "every cancelled line already released" catches the same lines arriving

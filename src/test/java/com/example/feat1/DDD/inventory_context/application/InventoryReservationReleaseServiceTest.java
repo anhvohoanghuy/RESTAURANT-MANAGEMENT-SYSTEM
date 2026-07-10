@@ -222,6 +222,25 @@ class InventoryReservationReleaseServiceTest {
   }
 
   @Test
+  void nullCancelledLineIdsIsTreatedAsEmptyWithoutNpe() {
+    // WR-01 regression: OrderCancelledEvent.cancelledLineIds() is nullable by the record's own
+    // type (and by a poison/schema-drifted payload). A null value must be treated as empty rather
+    // than NPEing on cancelledLineIds.isEmpty() before any idempotency/locking logic runs.
+    UUID orderId = UUID.randomUUID();
+    StockReservationEntity reservation = heldReservation(orderId);
+    when(lineSettlementRepository.countByOrderId(orderId)).thenReturn(0L);
+    when(lineReleaseRepository.countByOrderId(orderId)).thenReturn(0L);
+    OrderCancelledEvent event =
+        new OrderCancelledEvent(
+            UUID.randomUUID(), OrderCancelledEvent.TYPE, Instant.now(), orderId, true, null, 0);
+
+    assertThatCode(() -> service.onOrderCancelled(event)).doesNotThrowAnyException();
+
+    assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.RELEASED);
+    verify(orderLineLookupPort, never()).findLine(any(), any());
+  }
+
+  @Test
   void idempotentOnEventIdRedelivery() {
     UUID orderId = UUID.randomUUID();
     UUID orderLineId = UUID.randomUUID();
