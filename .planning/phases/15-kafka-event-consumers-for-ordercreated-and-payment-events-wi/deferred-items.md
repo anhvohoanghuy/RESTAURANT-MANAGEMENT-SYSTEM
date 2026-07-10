@@ -2,7 +2,9 @@
 
 Out-of-scope discoveries logged during execution (not fixed — see SCOPE BOUNDARY).
 
-## 15-01
+## 15-01 — ✅ RESOLVED (2026-07-10, quick task 260710-eqh)
+
+Payment + Table producer configs migrated to Jackson-3 `JacksonJsonSerializer` (commit `ab09ab1`); full Maven suite 213/213 green. Original note below.
 
 - **Payment/Table Kafka producers use the legacy Jackson-2 `JsonSerializer`.**
   - Files: `src/main/java/com/example/feat1/DDD/payment_context/infrastructure/config/PaymentKafkaProducerConfig.java`, `src/main/java/com/example/feat1/DDD/table_context/infrastructure/config/TableKafkaProducerConfig.java`
