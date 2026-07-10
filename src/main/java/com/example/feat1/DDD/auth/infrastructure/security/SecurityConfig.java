@@ -46,6 +46,9 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/auth/**")
                     .permitAll()
+                    .requestMatchers(
+                        "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**")
+                    .permitAll()
                     .requestMatchers("/auth/sessions", "/auth/sessions/**")
                     .hasAnyRole("USER", "ADMIN", "STAFF")
                     .requestMatchers("/cart", "/cart/**")
