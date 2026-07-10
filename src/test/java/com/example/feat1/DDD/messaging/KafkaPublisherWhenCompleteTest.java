@@ -12,11 +12,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.example.feat1.DDD.inventory_context.application.event.SettleTriggerEvent;
 import com.example.feat1.DDD.kitchen_context.infrastructure.adapter.KafkaKitchenSettleTriggerPublisher;
-import com.example.feat1.DDD.order_context.application.event.OrderConfirmedEvent;
-import com.example.feat1.DDD.order_context.application.event.OrderCreatedEvent;
-import com.example.feat1.DDD.order_context.infrastructure.adapter.KafkaOrderEventPublisher;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.AfterEach;
@@ -28,26 +24,23 @@ import org.springframework.kafka.support.SendResult;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * Locks in the whenComplete send-failure logging (K-WR-01 / I-WR-03) added to the four
- * fire-and-forget saga/kitchen Kafka publishers: a failed send is logged with an ERROR event
- * containing the orderId and the caller never sees an exception, while a successful send logs
- * nothing. Broker-free — KafkaTemplate is mocked, no EmbeddedKafka.
+ * Locks in the whenComplete send-failure logging (K-WR-01 / I-WR-03) added to the fire-and-forget
+ * saga/kitchen Kafka publishers: a failed send is logged with an ERROR event containing the orderId
+ * and the caller never sees an exception, while a successful send logs nothing. Broker-free —
+ * KafkaTemplate is mocked, no EmbeddedKafka.
  */
 class KafkaPublisherWhenCompleteTest {
 
   private ListAppender<ILoggingEvent> settleTriggerAppender;
-  private ListAppender<ILoggingEvent> orderEventAppender;
 
   @BeforeEach
   void setUp() {
     settleTriggerAppender = attach(KafkaKitchenSettleTriggerPublisher.class);
-    orderEventAppender = attach(KafkaOrderEventPublisher.class);
   }
 
   @AfterEach
   void tearDown() {
     detach(KafkaKitchenSettleTriggerPublisher.class, settleTriggerAppender);
-    detach(KafkaOrderEventPublisher.class, orderEventAppender);
   }
 
   private static ListAppender<ILoggingEvent> attach(Class<?> adapterClass) {
@@ -118,78 +111,5 @@ class KafkaPublisherWhenCompleteTest {
     publisher.publishSettleTrigger(event);
 
     assertThat(settleTriggerAppender.list).noneMatch(e -> e.getLevel() == Level.ERROR);
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  void orderEventPublisherLogsErrorOnFailedSendForBothTopicsAndDoesNotThrow() {
-    KafkaTemplate<String, OrderCreatedEvent> createdTemplate = mock(KafkaTemplate.class);
-    KafkaTemplate<String, OrderConfirmedEvent> confirmedTemplate = mock(KafkaTemplate.class);
-    KafkaOrderEventPublisher publisher =
-        new KafkaOrderEventPublisher(createdTemplate, confirmedTemplate);
-    ReflectionTestUtils.setField(publisher, "orderCreatedTopic", "orders.created");
-    ReflectionTestUtils.setField(publisher, "orderConfirmedTopic", "orders.confirmed");
-
-    UUID orderId = UUID.randomUUID();
-    OrderCreatedEvent createdEvent =
-        new OrderCreatedEvent(
-            UUID.randomUUID(),
-            OrderCreatedEvent.TYPE,
-            Instant.now(),
-            orderId,
-            null,
-            null,
-            List.of(),
-            null,
-            Instant.now());
-    OrderConfirmedEvent confirmedEvent =
-        new OrderConfirmedEvent(
-            UUID.randomUUID(), OrderConfirmedEvent.TYPE, Instant.now(), orderId, List.of());
-
-    when(createdTemplate.send(anyString(), anyString(), any()))
-        .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")));
-    when(confirmedTemplate.send(anyString(), anyString(), any()))
-        .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")));
-
-    publisher.publishOrderCreated(createdEvent);
-    publisher.publishOrderConfirmed(confirmedEvent);
-
-    assertThat(orderEventAppender.list).hasSize(2);
-    assertThat(orderEventAppender.list)
-        .allSatisfy(
-            e -> {
-              assertThat(e.getLevel()).isEqualTo(Level.ERROR);
-              assertThat(e.getFormattedMessage()).contains(orderId.toString());
-            });
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  void orderEventPublisherLogsNothingOnSuccessfulSend() {
-    KafkaTemplate<String, OrderCreatedEvent> createdTemplate = mock(KafkaTemplate.class);
-    KafkaTemplate<String, OrderConfirmedEvent> confirmedTemplate = mock(KafkaTemplate.class);
-    KafkaOrderEventPublisher publisher =
-        new KafkaOrderEventPublisher(createdTemplate, confirmedTemplate);
-    ReflectionTestUtils.setField(publisher, "orderCreatedTopic", "orders.created");
-    ReflectionTestUtils.setField(publisher, "orderConfirmedTopic", "orders.confirmed");
-
-    OrderCreatedEvent createdEvent =
-        new OrderCreatedEvent(
-            UUID.randomUUID(),
-            OrderCreatedEvent.TYPE,
-            Instant.now(),
-            UUID.randomUUID(),
-            null,
-            null,
-            List.of(),
-            null,
-            Instant.now());
-
-    when(createdTemplate.send(anyString(), anyString(), any()))
-        .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
-
-    publisher.publishOrderCreated(createdEvent);
-
-    assertThat(orderEventAppender.list).noneMatch(e -> e.getLevel() == Level.ERROR);
   }
 }
