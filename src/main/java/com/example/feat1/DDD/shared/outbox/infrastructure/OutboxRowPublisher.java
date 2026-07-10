@@ -49,6 +49,10 @@ public class OutboxRowPublisher {
           .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       row.setStatus("SENT");
       row.setSentAt(Instant.now());
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      row.setAttempts(row.getAttempts() + 1);
+      log.warn("Outbox row {} publish interrupted", row.getId(), ie);
     } catch (Exception ex) {
       row.setAttempts(row.getAttempts() + 1);
       if (row.getAttempts() >= MAX_ATTEMPTS) {

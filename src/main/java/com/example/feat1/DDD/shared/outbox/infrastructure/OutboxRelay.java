@@ -4,6 +4,8 @@ import com.example.feat1.DDD.shared.outbox.entity.OutboxEventEntity;
 import com.example.feat1.DDD.shared.outbox.repository.OutboxEventRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -29,6 +31,7 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "outbox.relay.enabled", havingValue = "true", matchIfMissing = true)
 public class OutboxRelay {
 
+  private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
   private static final int BATCH_SIZE = 100;
 
   private final OutboxEventRepository outboxEventRepository;
@@ -38,7 +41,11 @@ public class OutboxRelay {
   public void poll() {
     List<OutboxEventEntity> claimed = outboxEventRepository.claimPending(BATCH_SIZE);
     for (OutboxEventEntity row : claimed) {
-      outboxRowPublisher.publish(row);
+      try {
+        outboxRowPublisher.publish(row);
+      } catch (Exception ex) {
+        log.warn("Outbox row {} publish transaction failed; continuing batch", row.getId(), ex);
+      }
     }
   }
 }

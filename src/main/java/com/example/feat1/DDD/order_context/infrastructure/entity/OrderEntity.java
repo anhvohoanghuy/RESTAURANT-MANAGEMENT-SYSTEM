@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -45,7 +46,8 @@ public class OrderEntity {
   @Column(nullable = false)
   private OrderStatus status = OrderStatus.PENDING_CONFIRMATION;
 
-  @Column(name = "rejection_reason", length = REJECTION_REASON_MAX_LEN)
+  @Lob
+  @Column(name = "rejection_reason")
   private String rejectionReason;
 
   @Column(name = "submitted_at", nullable = false)

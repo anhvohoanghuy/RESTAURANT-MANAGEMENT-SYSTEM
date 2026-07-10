@@ -47,6 +47,10 @@ public class OutboxRetentionJob {
   @Scheduled(fixedDelayString = "${outbox.retention.delay-ms:3600000}")
   @Transactional
   public void sweepSentRetention() {
+    if (ttlDays < 1) {
+      log.warn("Outbox retention ttl-days is misconfigured ({}); skipping sweep", ttlDays);
+      return;
+    }
     Instant cutoff = Instant.now().minus(ttlDays, ChronoUnit.DAYS);
     int deleted = outboxEventRepository.deleteByStatusAndCreatedAtBefore("SENT", cutoff);
     if (deleted > 0) {
