@@ -92,18 +92,23 @@ public class OrderCancellationService {
         kitchenItemStatusPort.findStatuses(order.getId());
 
     List<OrderLineEntity> candidateLines = candidateLines(order, wholeOrder, requestedLineIds);
+    List<OrderLineEntity> activeCandidates =
+        candidateLines.stream().filter(line -> line.getCancelledAt() == null).toList();
+    List<OrderLineEntity> eligibleLines =
+        activeCandidates.stream().filter(line -> isBeforePreparing(line, kitchenStatuses)).toList();
+
+    // CR-02: for the whole-order path, the race-guard exclusion above is per-line -- but the
+    // order-level outcome must reflect it too. If ANY active line was excluded because its
+    // kitchen item already reached PREPARING, the order is no longer wholly-cancellable: reject
+    // outright with NO mutation and NO publish, rather than force a terminal CANCELLED status and
+    // a wholeOrder=true event that would trigger a full refund for food still being prepared.
+    if (wholeOrder && eligibleLines.size() < activeCandidates.size()) {
+      throw OrderDomainException.cancelWindowClosed();
+    }
 
     Instant now = Instant.now();
     List<UUID> cancelledLineIds = new ArrayList<>();
-    for (OrderLineEntity line : candidateLines) {
-      if (line.getCancelledAt() != null) {
-        continue;
-      }
-      KitchenItemStatusView status = kitchenStatuses.get(line.getId());
-      boolean beforePreparing = status == null || status.isBeforePreparing();
-      if (!beforePreparing) {
-        continue;
-      }
+    for (OrderLineEntity line : eligibleLines) {
       line.setCancelledAt(now);
       cancelledLineIds.add(line.getId());
     }
@@ -145,6 +150,12 @@ public class OrderCancellationService {
     }
     Set<UUID> requested = new HashSet<>(requestedLineIds);
     return order.getLines().stream().filter(line -> requested.contains(line.getId())).toList();
+  }
+
+  private boolean isBeforePreparing(
+      OrderLineEntity line, Map<UUID, KitchenItemStatusView> kitchenStatuses) {
+    KitchenItemStatusView status = kitchenStatuses.get(line.getId());
+    return status == null || status.isBeforePreparing();
   }
 
   private BigDecimal recomputeTotal(OrderEntity order) {

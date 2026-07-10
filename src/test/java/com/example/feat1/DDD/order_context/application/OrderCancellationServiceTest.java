@@ -178,6 +178,28 @@ class OrderCancellationServiceTest {
   }
 
   @Test
+  void wholeOrderCancelWithOneLineAlreadyPreparingRejectsWithNoPublishOrTerminalStatus() {
+    // CR-02 regression: the race-guard exclusion (kitchen port) is per-line, but the whole-order
+    // outcome must honor it too -- a whole-order cancel can never leave a still-preparing line
+    // behind while forcing the order terminal and publishing wholeOrder=true (which would trigger
+    // a full refund for food still being prepared).
+    OrderEntity order =
+        orderWithLines(OrderStatus.CONFIRMED, line(lineId1, "10.00"), line(lineId2, "20.00"));
+    when(orderRepository.findByIdAndUserId(orderId, userId)).thenReturn(Optional.of(order));
+    when(orderRepository.lockById(orderId)).thenReturn(Optional.of(order));
+    when(kitchenItemStatusPort.findStatuses(orderId))
+        .thenReturn(Map.of(lineId2, KitchenItemStatusView.AT_OR_AFTER_PREPARING));
+
+    assertThatThrownBy(() -> service.cancelOrder(userId, orderId))
+        .isInstanceOf(OrderDomainException.class)
+        .hasFieldOrPropertyWithValue("code", OrderDomainException.CANCEL_WINDOW_CLOSED);
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    assertThat(order.getLines()).allMatch(l -> l.getCancelledAt() == null);
+    verify(outboxWriter, never()).save(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
   void staffCancelSkipsOwnershipCheckAndLocksDirectly() {
     OrderEntity order = orderWithLines(OrderStatus.CONFIRMED, line(lineId1, "10.00"));
     when(orderRepository.lockById(orderId)).thenReturn(Optional.of(order));
