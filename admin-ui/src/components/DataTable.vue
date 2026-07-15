@@ -1,9 +1,33 @@
 <script setup lang="ts">
-defineProps<{
-  columns: string[]
+export type DataTableColumn = {
+  key: string
+  label: string
+  mono?: boolean
+}
+
+const props = defineProps<{
+  columns: DataTableColumn[]
   rows: Record<string, unknown>[]
+  rowKey?: string
   emptyText?: string
 }>()
+
+function keyFor(row: Record<string, unknown>, index: number): string {
+  if (props.rowKey) {
+    const value = row[props.rowKey]
+    if (value !== undefined && value !== null) {
+      return String(value)
+    }
+  }
+  return String(index)
+}
+
+function display(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return '-'
+  }
+  return String(value)
+}
 </script>
 
 <template>
@@ -11,13 +35,15 @@ defineProps<{
     <table v-if="rows.length" class="data-table">
       <thead>
         <tr>
-          <th v-for="column in columns" :key="column">{{ column }}</th>
+          <th v-for="column in columns" :key="column.key">{{ column.label }}</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, rowIndex) in rows" :key="rowIndex">
-          <td v-for="column in columns" :key="column">
-            <span :class="{ mono: column.toLowerCase().includes('id') }">{{ row[column] ?? '-' }}</span>
+        <tr v-for="(row, index) in rows" :key="keyFor(row, index)">
+          <td v-for="column in columns" :key="column.key">
+            <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]">
+              <span :class="{ mono: column.mono }">{{ display(row[column.key]) }}</span>
+            </slot>
           </td>
         </tr>
       </tbody>
