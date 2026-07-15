@@ -1,25 +1,37 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-current_phase: 999.1
-status: executing
-last_updated: "2026-07-10T08:49:20.898Z"
-last_activity: 2026-07-10
+milestone: v1.1
+milestone_name: Admin UI
+current_phase: 19
+status: milestone_complete
+last_updated: "2026-07-15T02:00:00.000Z"
+last_activity: 2026-07-15
 progress:
-  total_phases: 22
-  completed_phases: 20
-  total_plans: 54
+  total_phases: 19
+  completed_phases: 18
+  total_plans: 53
   completed_plans: 51
-  percent: 91
+  percent: 96
 ---
 
 # State
 
-**Status:** Ready to execute
-**Current Phase:** 999.1
-**Plans:** Phases 01–16 complete (30 plans); Phase 17 not started
-**Last Activity:** 2026-07-10
+**Status:** v1.0 (backend MVP) shipped 2026-07-15 — now v1.1 in progress (Phase 19 Vue admin UI)
+**Current Phase:** 19 (v1.1 — Vue.js admin interface, 1/3 plans)
+**Plans:** v1.0 backend complete (Phases 01–18, 50 plans); Phase 19 in progress (19-01 done)
+**Last Activity:** 2026-07-15
+
+## Deferred Items
+
+Items acknowledged and deferred at v1.0 milestone close on 2026-07-15:
+
+| Category | Item | Status |
+|----------|------|--------|
+| backlog | 999.1 payment-history-filters (status/method/date-range on GET /admin/payments, from Phase 11 D-33) | pending (v1.1 candidate) |
+| verification_gap | 17.2-VERIFICATION.md multi-instance outbox duplicate-publish note | resolved doc-only in quick task 260710-eqh; single-instance topology unaffected |
+| quick_task | 260710-e78-fix-4-minor-findings-from-17-2-review-md | completed (commit 0825bc2); missing status frontmatter only |
+| quick_task | 260710-eqh-migrate-payment-table-kafka-producers-to | completed (commit ab09ab1); missing status frontmatter only |
+| phase-doc | 17.2-inventory-settlement-idempotency-hardening + 17.3-payment-table-kafka-jackson3 | code merged into shipped backend; GSD docs orphaned (not in roadmap), collide with 17.2 outbox — re-number in v1.1 |
 
 ## Notes
 
