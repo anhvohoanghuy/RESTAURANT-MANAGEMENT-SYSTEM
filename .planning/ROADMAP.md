@@ -59,12 +59,12 @@ Plans:
 **Goal:** Fill the Group-A UI gaps from the Phase 19 coverage audit (backend endpoints already exist): edit (PUT) forms across Menu (category/dish), Tables (area/table), and Inventory (ingredient); recipe authoring (`PUT /admin/menu/recipes`) + topping group/option management screens (bindings exist, no view); ingredient cost history (`listCosts`) + `recipes/cost` and menu costing reads; auth session management (`GET/DELETE /auth/sessions`, revoke-others); full reservation status transitions (CONFIRMED/NO_SHOW/COMPLETED, not cancel-only); and role-aware affordances (gate ADMIN-only controls for STAFF — subsumes backlog 999.2). Frontend-only; document remaining backend list-endpoint gaps (orders/reservations/admin-menu listing, payment filters 999.1) as follow-ups rather than mocking.
 **Requirements:** D-01 (shared create+edit modal), D-02 (dedicated recipe builder), plus UI-SPEC §3 topping, §4 sessions, §5 reservation status, §6 role gating (no formal REQUIREMENTS.md IDs — coverage driven by CONTEXT decisions + UI-SPEC surfaces)
 **Depends on:** Phase 19
-**Plans:** 6 plans (3 waves)
+**Plans:** 1/6 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 20-01-PLAN.md — Foundation: modules.ts new bindings/types + sessionsApi + auth.ts JWT role decode/isAdmin + tests (Wave 1)
+- [x] 20-01-PLAN.md — Foundation: modules.ts new bindings/types + sessionsApi + auth.ts JWT role decode/isAdmin + tests (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
