@@ -2,25 +2,35 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 18
-status: ready_to_plan
-last_updated: 2026-07-10T05:32:59.721Z
-last_activity: 2026-07-10
+current_phase: 999.1
+status: completed
+last_updated: "2026-07-15T01:08:28.500Z"
+last_activity: 2026-07-15
 progress:
   total_phases: 20
-  completed_phases: 18
+  completed_phases: 19
   total_plans: 50
   completed_plans: 50
-  percent: 90
-stopped_at: Phase 18 complete (6/6) — ready to discuss Phase 999.1
+  percent: 95
 ---
 
 # State
 
-**Status:** Ready to plan
-**Current Phase:** 999.1
-**Plans:** Phases 01–16 complete (30 plans); Phase 17 not started
-**Last Activity:** 2026-07-10
+**Status:** v1.0 milestone complete
+**Current Phase:** 999.1 (backlog — v1.1 candidate)
+**Plans:** v1.0 shipped — Phases 01–18 complete (50/50 plans)
+**Last Activity:** 2026-07-15
+
+## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-07-15:
+
+| Category | Item | Status |
+|----------|------|--------|
+| backlog | 999.1 payment-history-filters (status/method/date-range on GET /admin/payments, from Phase 11 D-33) | pending (v1.1 candidate) |
+| verification_gap | 17.2-VERIFICATION.md multi-instance outbox duplicate-publish note | resolved doc-only in quick task 260710-eqh; single-instance topology unaffected |
+| quick_task | 260710-e78-fix-4-minor-findings-from-17-2-review-md | completed (commit 0825bc2); missing status frontmatter only |
+| quick_task | 260710-eqh-migrate-payment-table-kafka-producers-to | completed (commit ab09ab1); missing status frontmatter only |
 
 ## Notes
 
@@ -81,3 +91,14 @@ stopped_at: Phase 18 complete (6/6) — ready to discuss Phase 999.1
 - [Phase 17.2 review]: 2026-07-10 — of 7 findings, 5 fixed. WR-02/WR-03/WR-05/IN-01 fixed in quick task 260710-e78; WR-04 fixed (dropped `${DB_PASSWORD:123456}` default → `${DB_PASSWORD}` fail-fast, local-dev value kept in `.env.example`). WR-01 (de-transactionalized `poll()` releases SKIP LOCKED locks before `publish()` → cross-instance double-publish) resolved doc-only in quick task 260710-eqh (approach b): `claimPending`/`OutboxRelay` Javadoc corrected to stop asserting cross-instance dedup safety and document at-least-once + idempotent-consumer bounding + single-instance topology. Runtime behavior unchanged; if multi-instance deployment is later planned, upgrade to a durable claim (intermediate CLAIMING status). IN-02 is advisory (no change needed).
 - [Phase 15 deferred 15-01]: 2026-07-10 — RESOLVED in quick task 260710-eqh. Payment + Table Kafka producer configs migrated from Jackson-2 `JsonSerializer` to Jackson-3 `JacksonJsonSerializer` (matching order/kitchen/inventory), fixing a latent runtime failure when publishing PaymentEvent/TableOperationEvent (which carry `Instant` fields) on the Boot 4 / Jackson 3 classpath. Full Maven suite 213/213 green.
 - [Phase 17.1]: Phase 17.1 scope EXPANDED (2026-07-09) to cover both Kitchen and Inventory/Order review debt. Inventory decisions (fix-now): (I-WR-01) replace inline saveAndFlush+catch idempotency idiom in InventoryReservationService and OrderConfirmationService with the REQUIRES_NEW ledger-writer pattern already introduced in Phase 16; (I-WR-02) implement a full transactional outbox — persist saga events (OrderCreated, StockReservationResult, OrderConfirmed) to an outbox table in the same DB transaction + a relay poller publishing to Kafka, so a crash between commit and Kafka send no longer strands orders in PENDING_CONFIRMATION; (I-WR-03) add whenComplete callback + error logging to KafkaInventoryStockResultPublisher and KafkaOrderEventPublisher; (I-WR-04) make rejection_reason a TEXT column and truncate describe() output to avoid overflow; (I-WR-05) switch the global producer value-serializer in application.properties from Jackson-2 JsonSerializer to Jackson-3 and re-run the full Maven suite to catch Payment/Table regressions. Combined with the 4 Kitchen fixes already decided.
+
+## Current Position
+
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-15 — Milestone v1.0 completed and archived
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
