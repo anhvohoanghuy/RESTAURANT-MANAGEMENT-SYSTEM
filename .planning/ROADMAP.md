@@ -39,11 +39,11 @@
 **Goal:** A Vue 3 + Vite admin app (separate front-end in this repo) letting ADMIN/STAFF sign in (JWT session), and operate existing backend admin surfaces from one dashboard: menu, tables/table-ops, inventory/costing/stock, payments/refunds, kitchen board, and order cancellation/status. Consumes the Spring Boot API via a typed client; no backend behavior changes except clearly-identified API gaps.
 **Requirements:** [ADMIN-UI-001..006]
 **Depends on:** Phase 18
-**Plans:** 3 planned, 1 complete (19-01 done; 19-02, 19-03 pending)
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 19-01 — (complete)
-- [ ] 19-02
+- [x] 19-02
 - [ ] 19-03
 
 > **Reconcile in v1.1 planning:** two orphan hardening phase-directories exist on disk with their *code already merged* into the shipped backend but were never added to this roadmap and collide in numbering with v1.0's 17.2:
