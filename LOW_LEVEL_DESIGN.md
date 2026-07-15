@@ -7,6 +7,8 @@ Tài liệu này mô tả thiết kế mức thấp của `feat1` dựa trên co
 
 Tài liệu này bổ sung cho `HIGH_LEVEL_DESIGN.md`: HLD mô tả hệ thống ở mức bức tranh tổng thể, còn LLD mô tả cách các lớp hiện tại phối hợp để thực thi từng luồng.
 
+Xem thêm `DESIGN_DIAGRAMS.md` để có bộ sơ đồ trực quan đi kèm HLD và LLD.
+
 ## 2. Cấu Trúc Package
 
 Backend chính nằm dưới:

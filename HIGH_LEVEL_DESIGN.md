@@ -7,6 +7,8 @@
 
 Kiến trúc tổng thể là modular monolith: các module nghiệp vụ chạy trong cùng một ứng dụng Spring Boot, giao tiếp nội bộ qua service/port, đồng thời dùng workflow event-driven qua Kafka cho các luồng cần tách rời như xác nhận đơn, giữ tồn kho, tạo ticket bếp và settlement.
 
+Xem thêm `DESIGN_DIAGRAMS.md` để có bộ sơ đồ runtime, context map, saga, outbox, payment và frontend.
+
 ## 2. Mục Tiêu Thiết Kế
 
 - Tách nghiệp vụ theo bounded context để mỗi miền chịu trách nhiệm một phần rõ ràng.
