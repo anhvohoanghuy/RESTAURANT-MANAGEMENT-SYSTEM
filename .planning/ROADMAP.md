@@ -39,12 +39,12 @@
 **Goal:** A Vue 3 + Vite admin app (separate front-end in this repo) letting ADMIN/STAFF sign in (JWT session), and operate existing backend admin surfaces from one dashboard: menu, tables/table-ops, inventory/costing/stock, payments/refunds, kitchen board, and order cancellation/status. Consumes the Spring Boot API via a typed client; no backend behavior changes except clearly-identified API gaps.
 **Requirements:** [ADMIN-UI-001..006]
 **Depends on:** Phase 18
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 19-01 — (complete)
 - [x] 19-02
-- [ ] 19-03
+- [x] 19-03
 
 > **Reconcile in v1.1 planning:** two orphan hardening phase-directories exist on disk with their *code already merged* into the shipped backend but were never added to this roadmap and collide in numbering with v1.0's 17.2:
 > - `17.2-inventory-settlement-idempotency-hardening` (atomic settlement ledger write) — re-number (e.g. 17.4)
@@ -55,7 +55,7 @@ Plans:
 | Milestone | Phases | Plans | Status | Shipped |
 | --------- | ------ | ----- | ------ | ------- |
 | v1.0 MVP (Backend) | 01–18 | 50/50 | ✅ Complete | 2026-07-15 |
-| v1.1 Admin UI | 19 | 1/3 | 🚧 In progress | — |
+| v1.1 Admin UI | 19 | 3/3 | ✅ Complete | 2026-07-15 |
 
 
 ## Backlog
@@ -211,4 +211,4 @@ Plans:
   6. Backend API gaps discovered while wiring the UI are documented as follow-up items instead of silently mocked as if complete.
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 19 to break down)
+- [x] TBD (run /gsd-plan-phase 19 to break down) (completed 2026-07-15)
