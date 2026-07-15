@@ -212,3 +212,9 @@ Plans:
 
 Plans:
 - [x] TBD (run /gsd-plan-phase 19 to break down) (completed 2026-07-15)
+
+### Phase 999.2: Role-aware UI affordances in admin-ui (BACKLOG)
+
+**Goal:** Decode/store the authenticated user's role on login and gate ADMIN-only controls in the Vue admin app (menu category/dish/topping CRUD, table area/table CRUD) so STAFF users don't see controls that only 403 reactively. Backend already enforces `/admin/**` correctly — this is a frontend UX gap surfaced by Phase 19 verification (non-blocking; originated from the stale duplicate Phase 19 Success-Criteria block).
+**Requirements:** TBD
+**Plans:** 0 plans
