@@ -56,12 +56,17 @@ Plans:
 ### Phase 20: Complete admin UI
 
 **Goal:** Fill the Group-A UI gaps from the Phase 19 coverage audit (backend endpoints already exist): edit (PUT) forms across Menu (category/dish), Tables (area/table), and Inventory (ingredient); recipe authoring (`PUT /admin/menu/recipes`) + topping group/option management screens (bindings exist, no view); ingredient cost history (`listCosts`) + `recipes/cost` and menu costing reads; auth session management (`GET/DELETE /auth/sessions`, revoke-others); full reservation status transitions (CONFIRMED/NO_SHOW/COMPLETED, not cancel-only); and role-aware affordances (gate ADMIN-only controls for STAFF — subsumes backlog 999.2). Frontend-only; document remaining backend list-endpoint gaps (orders/reservations/admin-menu listing, payment filters 999.1) as follow-ups rather than mocking.
-**Requirements:** TBD
+**Requirements:** D-01 (shared create+edit modal), D-02 (dedicated recipe builder), plus UI-SPEC §3 topping, §4 sessions, §5 reservation status, §6 role gating (no formal REQUIREMENTS.md IDs — coverage driven by CONTEXT decisions + UI-SPEC surfaces)
 **Depends on:** Phase 19
-**Plans:** 0 plans
+**Plans:** 6 plans (3 waves)
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 20 to break down)
+- [ ] 20-01-PLAN.md — Foundation: modules.ts new bindings/types + sessionsApi + auth.ts JWT role decode/isAdmin + tests (Wave 1)
+- [ ] 20-02-PLAN.md — MenuView: create+edit category/dish modals (D-01), topping management, recipe entry, role gating (Wave 2)
+- [ ] 20-03-PLAN.md — TablesView: create+edit area/table modals (D-01), full reservation status selector, role gating (Wave 2)
+- [ ] 20-04-PLAN.md — InventoryView: create+edit ingredient modal (D-01) + read-only cost-history modal (Wave 2)
+- [ ] 20-05-PLAN.md — RecipeView (D-02) dedicated builder with repeatable rows + cost panel + pure lib/recipe transform (Wave 2)
+- [ ] 20-06-PLAN.md — SessionsView (list/revoke/revoke-others) + routing/nav wiring + ADMIN-only recipe route guard (Wave 3)
 
 ## Progress
 
@@ -69,7 +74,7 @@ Plans:
 | --------- | ------ | ----- | ------ | ------- |
 | v1.0 MVP (Backend) | 01–18 | 50/50 | ✅ Complete | 2026-07-15 |
 | v1.1 Admin UI | 19 | 3/3 | ✅ Complete | 2026-07-15 |
-| v1.2 Admin UI Completion | 20 | 0/? | 📋 Planned | — |
+| v1.2 Admin UI Completion | 20 | 0/6 | 📋 Planned | — |
 
 ## Backlog
 
@@ -81,9 +86,7 @@ Plans:
 
 ### Phase 999.2: Role-aware UI affordances in admin-ui (BACKLOG)
 
-**Goal:** Decode/store the authenticated user's role on login and gate ADMIN-only controls in the Vue admin app so STAFF users don't see controls that only 403 reactively. Backend enforces `/admin/**` correctly — frontend UX gap from Phase 19 verification (non-blocking). NOTE: folded into Phase 20 scope; keep here only if Phase 20 drops it.
-**Requirements:** TBD
-**Plans:** 0 plans
+**Goal:** Decode/store the authenticated user's role on login and gate ADMIN-only controls in the Vue admin app so STAFF users don't see controls that only 403 reactively. Backend enforces `/admin/**` correctly — frontend UX gap from Phase 19 verification (non-blocking). NOTE: folded into Phase 20 scope (planned in 20-01/20-02/20-03/20-06); drop this backlog item once Phase 20 ships.
 
 ### Phase 999.3: Table reservation with pre-order (đặt bàn giữ chỗ + gọi món trước) (BACKLOG)
 
