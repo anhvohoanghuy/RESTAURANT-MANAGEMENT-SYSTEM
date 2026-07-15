@@ -1,4 +1,5 @@
 import { apiFetch } from './client'
+import { authState } from '../stores/auth'
 
 function withQuery(
   path: string,
@@ -147,14 +148,36 @@ export type MenuCostingItem = {
 }
 export type MenuCostingResponse = { items: MenuCostingItem[] }
 
+export type RecipeLine = { ingredientId: string; ingredient: string; quantity: number; unit: string; sortOrder?: number }
+export type RecipeRequest = { targetType: RecipeTargetType; targetId: string; name: string; lines: RecipeLine[] }
+export type RecipeResponseLine = {
+  id: string
+  ingredientId: string
+  ingredient: string
+  quantity: number
+  unit: string
+  sortOrder: number
+}
+export type RecipeResponse = {
+  id: string
+  targetType: RecipeTargetType
+  targetId: string
+  name: string
+  lines: RecipeResponseLine[]
+}
+
 export const menuApi = {
   getPublicMenu: () => apiFetch<PublicMenuResponse>('/menus/public'),
   createCategory: (body: CategoryRequest) =>
     apiFetch<CategoryResponse>('/admin/menu/categories', { method: 'POST', body: JSON.stringify(body) }),
+  updateCategory: (id: string, body: CategoryRequest) =>
+    apiFetch<CategoryResponse>(`/admin/menu/categories/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   archiveCategory: (id: string) =>
     apiFetch<CategoryResponse>(`/admin/menu/categories/${id}`, { method: 'DELETE' }),
   createDish: (body: DishRequest) =>
     apiFetch<DishResponse>('/admin/menu/dishes', { method: 'POST', body: JSON.stringify(body) }),
+  updateDish: (id: string, body: DishRequest) =>
+    apiFetch<DishResponse>(`/admin/menu/dishes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   archiveDish: (id: string) => apiFetch<DishResponse>(`/admin/menu/dishes/${id}`, { method: 'DELETE' }),
   createToppingGroup: (body: ToppingGroupRequest) =>
     apiFetch<ToppingGroupResponse>('/admin/menu/topping-groups', { method: 'POST', body: JSON.stringify(body) }),
@@ -163,7 +186,11 @@ export const menuApi = {
   archiveToppingOption: (id: string) =>
     apiFetch<ToppingOptionResponse>(`/admin/menu/topping-options/${id}`, { method: 'DELETE' }),
   getRecipe: (targetType: RecipeTargetType, targetId: string) =>
-    apiFetch<unknown>(withQuery('/admin/menu/recipes', { targetType, targetId })),
+    apiFetch<RecipeResponse>(withQuery('/admin/menu/recipes', { targetType, targetId })),
+  upsertRecipe: (body: RecipeRequest) =>
+    apiFetch<RecipeResponse>('/admin/menu/recipes', { method: 'PUT', body: JSON.stringify(body) }),
+  recipeCost: (targetType: RecipeTargetType, targetId: string) =>
+    apiFetch<RecipeCostResponse>(withQuery('/admin/menu/recipes/cost', { targetType, targetId })),
   getMenuCosting: () => apiFetch<MenuCostingResponse>('/admin/menu/costing'),
 }
 
@@ -265,10 +292,14 @@ export const tablesApi = {
   listAreas: () => apiFetch<DiningAreaResponse[]>('/admin/tables/areas'),
   createArea: (body: DiningAreaRequest) =>
     apiFetch<DiningAreaResponse>('/admin/tables/areas', { method: 'POST', body: JSON.stringify(body) }),
+  updateArea: (id: string, body: DiningAreaRequest) =>
+    apiFetch<DiningAreaResponse>(`/admin/tables/areas/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   archiveArea: (id: string) => apiFetch<DiningAreaResponse>(`/admin/tables/areas/${id}`, { method: 'DELETE' }),
   listTables: () => apiFetch<DiningTableResponse[]>('/admin/tables'),
   createTable: (body: DiningTableRequest) =>
     apiFetch<DiningTableResponse>('/admin/tables', { method: 'POST', body: JSON.stringify(body) }),
+  updateTable: (id: string, body: DiningTableRequest) =>
+    apiFetch<DiningTableResponse>(`/admin/tables/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   archiveTable: (id: string) => apiFetch<DiningTableResponse>(`/admin/tables/${id}`, { method: 'DELETE' }),
   listOccupancy: () => apiFetch<TableOccupancyResponse[]>('/admin/tables/occupancy'),
   setOccupancy: (tableId: string, body: SetTableOccupancyRequest) =>
@@ -386,11 +417,35 @@ export type StockBalanceResponse = {
   lastMovementAt: string | null
 }
 
+export type RecipeCostLineResponse = {
+  recipeLineId: string
+  ingredientId: string
+  ingredientName: string
+  quantity: number
+  unit: string
+  convertedQuantity: number
+  costUnit: string
+  unitCost: number
+  lineCost: number
+  costed: boolean
+  reason: string | null
+}
+export type RecipeCostResponse = {
+  targetType: RecipeTargetType
+  targetId: string
+  recipeName: string
+  totalCost: number
+  fullyCosted: boolean
+  lines: RecipeCostLineResponse[]
+}
+
 export const inventoryApi = {
   listIngredients: (search?: string) =>
     apiFetch<IngredientResponse[]>(withQuery('/admin/inventory/ingredients', { search })),
   createIngredient: (body: IngredientRequest) =>
     apiFetch<IngredientResponse>('/admin/inventory/ingredients', { method: 'POST', body: JSON.stringify(body) }),
+  updateIngredient: (id: string, body: IngredientRequest) =>
+    apiFetch<IngredientResponse>(`/admin/inventory/ingredients/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   archiveIngredient: (id: string) =>
     apiFetch<IngredientResponse>(`/admin/inventory/ingredients/${id}`, { method: 'DELETE' }),
   addCost: (ingredientId: string, body: IngredientCostRequest) =>
@@ -507,4 +562,27 @@ export const ordersApi = {
     apiFetch<OrderCancellationResponse>(`/admin/orders/${orderId}/cancel`, { method: 'POST' }),
   cancelOrderLine: (orderId: string, lineId: string) =>
     apiFetch<OrderCancellationResponse>(`/admin/orders/${orderId}/items/${lineId}/cancel`, { method: 'POST' }),
+}
+
+// ---------------------------------------------------------------------------
+// Auth sessions
+// ---------------------------------------------------------------------------
+
+export type AuthSessionResponse = {
+  sessionId: string
+  createdAt: string
+  expiresAt: string
+  lastUsedAt: string
+  ipAddress: string | null
+  userAgent: string | null
+}
+
+export const sessionsApi = {
+  list: () => apiFetch<AuthSessionResponse[]>('/auth/sessions'),
+  revoke: (sessionId: string) => apiFetch<void>(`/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+  revokeOthers: () =>
+    apiFetch<void>('/auth/sessions/revoke-others', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken: authState.refreshToken }),
+    }),
 }
