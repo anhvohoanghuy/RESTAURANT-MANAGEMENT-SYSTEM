@@ -84,3 +84,9 @@ Plans:
 **Goal:** Decode/store the authenticated user's role on login and gate ADMIN-only controls in the Vue admin app so STAFF users don't see controls that only 403 reactively. Backend enforces `/admin/**` correctly — frontend UX gap from Phase 19 verification (non-blocking). NOTE: folded into Phase 20 scope; keep here only if Phase 20 drops it.
 **Requirements:** TBD
 **Plans:** 0 plans
+
+### Phase 999.3: Table reservation with pre-order (đặt bàn giữ chỗ + gọi món trước) (BACKLOG)
+
+**Goal:** Let a customer reserve a table for a future time slot AND attach food items to order in advance (pre-order), so the kitchen/floor can prepare against a booking. Currently reservation (`TableReservationEntity`, Phase 12) holds only table snapshot + customer contact + party size + time window + status, with NO linkage to orders; Order/Cart takes `tableId`/`tableSessionId` but never `reservationId`; and there is no pre-order concept anywhere. Requires BACKEND work (persist pre-order line items against a reservation, rules for holding/confirming/converting the pre-order into a real order when the reservation is seated, interaction with inventory reservation + kitchen) plus FRONTEND. New feature — not covered by Phase 19/20 (which only wire existing admin endpoints).
+**Requirements:** TBD
+**Plans:** 0 plans
