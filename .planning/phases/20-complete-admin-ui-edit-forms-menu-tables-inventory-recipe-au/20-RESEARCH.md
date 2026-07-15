@@ -438,7 +438,7 @@ router.beforeEach((to) => {
 
 **This table is empty: all claims in this research were verified directly by reading source files in this session** (Java controllers, Java DTO records, Java enums, `SecurityConfig.java`, `JwtProvider.java`, `RoleEnum.java`, `CustomUserDetails.java`, and every relevant `admin-ui/src/**` file), or copied verbatim from `20-CONTEXT.md`/`20-UI-SPEC.md` which are themselves marked as verified against `SecurityConfig.java`. No claim in this document rests on training-data recall alone.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Ingredient cost-history display (`listCosts`) — where does it render?**
    - What we know: `listCosts(ingredientId)` binding already exists and is unused; UI-SPEC's "New UI for Phase 20" section (§1-6) does not describe a dedicated cost-history panel/table for it, unlike the Recipe cost panel which is fully specified in §2.

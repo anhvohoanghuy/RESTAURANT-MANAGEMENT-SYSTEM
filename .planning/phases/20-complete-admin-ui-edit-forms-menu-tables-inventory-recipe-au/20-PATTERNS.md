@@ -238,7 +238,7 @@ Wrap the text node in a clickable span/button calling `openCategoryModal(categor
 
 **Recipe entry point:** add a `ghost-button small` "Recipe" to the dish row's `.table-actions` cell (line 276-282, after the existing Archive button per UI-SPEC §2), navigating via `router.push({ name: 'recipe', params: { dishId: row.id } })` — no existing router-navigation-from-a-table-action precedent in this view; `router.push` usage itself is established in `AdminLayout.vue`'s `signOut()` (line 41).
 
-**Role gating (`v-if="authState.isAdmin"`)** applies to: "New category"/"New dish" buttons (lines 240, 261), category-chip text-click + × (lines 243-248), dish row Edit/Archive/Recipe buttons (lines 276-283), all new topping create/archive controls. Import `authState`/`isAdmin` from `../stores/auth` (new import, following the existing relative-import convention at lines 11-19).
+**Role gating (`v-if="isAdmin"`)** applies to: "New category"/"New dish" buttons (lines 240, 261), category-chip text-click + × (lines 243-248), dish row Edit/Archive/Recipe buttons (lines 276-283), all new topping create/archive controls. Import `isAdmin` (standalone computed; not a field of authState) from `../stores/auth` (new import, following the existing relative-import convention at lines 11-19).
 
 ---
 
@@ -274,7 +274,7 @@ New reservation-status modal state: `reactive({ open: false, reservationId: '', 
 
 **Row button rename:** "Cancel" (line 481-488) becomes "Status", `@click` changes from `cancelReservation(...)` to opening the new modal.
 
-**Role gating:** `v-if="authState.isAdmin"` on "New area"/area-× (lines 365, 370), "New table" (line 378), table row Edit/Archive (lines 445-451). Do NOT gate the Reservations panel, Occupancy panel, or session-modal actions (ADMIN+STAFF per UI-SPEC §6).
+**Role gating:** `v-if="isAdmin"` on "New area"/area-× (lines 365, 370), "New table" (line 378), table row Edit/Archive (lines 445-451). Do NOT gate the Reservations panel, Occupancy panel, or session-modal actions (ADMIN+STAFF per UI-SPEC §6).
 
 ---
 
@@ -286,7 +286,7 @@ New reservation-status modal state: `reactive({ open: false, reservationId: '', 
 
 **Cost-history view (Open Question 1 in RESEARCH.md — no UI-SPEC-specified layout):** closest analog is the existing `openCostModal` add-cost flow (lines 210-220) for the trigger-button-next-to-row shape, combined with `DataTable`'s read-only cell-slot usage as seen in `PaymentsView.vue`'s payment-history table (columns without form inputs, just `{{ formatMoney(...) }}`/`{{ formatDateTime(...) }}` interpolation, lines 217-231). Recommended: a small "View costs" `ghost-button small` next to the existing "Add cost" button (line 285) opening a read-only `Modal` with a `DataTable` of `inventoryApi.listCosts(ingredientId)` results (columns: unit cost, cost unit, effective at, source, note, created at) — no form, no submit handler, just a fetch-on-open + `DataTable` render, following `PaymentsView`'s read-only-column convention.
 
-**No role gating needed** — Inventory stays visible to ADMIN+STAFF per UI-SPEC §6 (do NOT wrap any Inventory control in `v-if="authState.isAdmin"`).
+**No role gating needed** — Inventory stays visible to ADMIN+STAFF per UI-SPEC §6 (do NOT wrap any Inventory control in `v-if="isAdmin"`).
 
 ---
 
@@ -470,7 +470,7 @@ Recommended per RESEARCH.md's Wave 0 Gaps: extract `toRecipeRequest(dishId, dish
 **Source:** RESEARCH.md Pattern 3 + UI-SPEC §6 role matrix (authoritative)
 **Apply to:** `MenuView.vue` (all catalog CRUD + topping + Recipe-button), `TablesView.vue` (area/table CRUD only — NOT reservations/occupancy), router `adminOnly` meta on the Recipe route
 ```html
-<button v-if="authState.isAdmin" class="ghost-button" type="button" @click="openXModal">New X</button>
+<button v-if="isAdmin" class="ghost-button" type="button" @click="openXModal">New X</button>
 ```
 Never use `disabled` + tooltip for this — `v-if` only (locked decision, D-01 discretion notes + UI-SPEC §6).
 

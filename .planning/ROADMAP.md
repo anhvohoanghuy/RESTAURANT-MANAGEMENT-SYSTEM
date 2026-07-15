@@ -43,6 +43,7 @@
 **Plans:** 3/3 plans complete
 
 Plans:
+
 - [x] 19-01 — (complete)
 - [x] 19-02
 - [x] 19-03
@@ -61,11 +62,19 @@ Plans:
 **Plans:** 6 plans (3 waves)
 
 Plans:
+**Wave 1**
+
 - [ ] 20-01-PLAN.md — Foundation: modules.ts new bindings/types + sessionsApi + auth.ts JWT role decode/isAdmin + tests (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 20-02-PLAN.md — MenuView: create+edit category/dish modals (D-01), topping management, recipe entry, role gating (Wave 2)
 - [ ] 20-03-PLAN.md — TablesView: create+edit area/table modals (D-01), full reservation status selector, role gating (Wave 2)
 - [ ] 20-04-PLAN.md — InventoryView: create+edit ingredient modal (D-01) + read-only cost-history modal (Wave 2)
 - [ ] 20-05-PLAN.md — RecipeView (D-02) dedicated builder with repeatable rows + cost panel + pure lib/recipe transform (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 20-06-PLAN.md — SessionsView (list/revoke/revoke-others) + routing/nav wiring + ADMIN-only recipe route guard (Wave 3)
 
 ## Progress
