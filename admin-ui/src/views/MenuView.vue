@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { X } from '@lucide/vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import DataTable, { type DataTableColumn } from '../components/DataTable.vue'
@@ -8,15 +9,18 @@ import GapNotice from '../components/GapNotice.vue'
 import Modal from '../components/Modal.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import Toolbar from '../components/Toolbar.vue'
-import { ApiError } from '../api/client'
 import {
   knownGaps,
   menuApi,
   type MenuCostingItem,
   type MenuStatus,
+  type PublicCategory,
   type PublicMenuResponse,
 } from '../api/modules'
+import { isAdmin } from '../stores/auth'
 import { formatMoney, formatPercent, messageOf } from '../lib/format'
+
+const router = useRouter()
 
 const loading = ref(true)
 const error = ref('')
@@ -60,6 +64,7 @@ onMounted(() => {
 type DishRow = {
   id: string
   name: string
+  description: string
   basePrice: number
   sortOrder: number
   categoryId: string
@@ -71,6 +76,7 @@ const dishRows = computed<DishRow[]>(() =>
     category.dishes.map((dish) => ({
       id: dish.id,
       name: dish.name,
+      description: dish.description,
       basePrice: dish.basePrice,
       sortOrder: dish.sortOrder,
       categoryId: category.id,
@@ -107,17 +113,22 @@ const costingColumns: DataTableColumn[] = [
 
 const gaps = knownGaps.menu
 
-// -- Category creation -------------------------------------------------
+// -- Category create + edit ----------------------------------------------
 
 const categoryModalOpen = ref(false)
+const editingCategoryId = ref<string | null>(null)
 const categoryForm = reactive({ name: '', description: '', sortOrder: 0, status: 'ACTIVE' as MenuStatus })
 const categorySaving = ref(false)
 const categoryFormError = ref('')
 
-function openCategoryModal() {
-  categoryForm.name = ''
-  categoryForm.description = ''
-  categoryForm.sortOrder = 0
+const categoryModalTitle = computed(() => (editingCategoryId.value ? 'Edit category' : 'New category'))
+
+function openCategoryModal(row?: PublicCategory) {
+  editingCategoryId.value = row?.id ?? null
+  categoryForm.name = row?.name ?? ''
+  categoryForm.description = row?.description ?? ''
+  categoryForm.sortOrder = row?.sortOrder ?? 0
+  // Public menu categories are always ACTIVE (findActiveOrdered on the backend); safe default on edit.
   categoryForm.status = 'ACTIVE'
   categoryFormError.value = ''
   categoryModalOpen.value = true
@@ -127,24 +138,31 @@ async function submitCategory() {
   categorySaving.value = true
   categoryFormError.value = ''
   try {
-    await menuApi.createCategory({
+    const payload = {
       name: categoryForm.name,
       description: categoryForm.description || undefined,
       sortOrder: categoryForm.sortOrder,
       status: categoryForm.status,
-    })
+    }
+    if (editingCategoryId.value) {
+      await menuApi.updateCategory(editingCategoryId.value, payload)
+    } else {
+      await menuApi.createCategory(payload)
+    }
+    editingCategoryId.value = null
     categoryModalOpen.value = false
     await loadMenu()
   } catch (caught) {
-    categoryFormError.value = caught instanceof ApiError ? caught.message : 'We could not save this category.'
+    categoryFormError.value = messageOf(caught, 'We could not save this category.')
   } finally {
     categorySaving.value = false
   }
 }
 
-// -- Dish creation -------------------------------------------------------
+// -- Dish create + edit ---------------------------------------------------
 
 const dishModalOpen = ref(false)
+const editingDishId = ref<string | null>(null)
 const dishForm = reactive({
   categoryId: '',
   name: '',
@@ -156,12 +174,16 @@ const dishForm = reactive({
 const dishSaving = ref(false)
 const dishFormError = ref('')
 
-function openDishModal() {
-  dishForm.categoryId = menu.value.categories[0]?.id ?? ''
-  dishForm.name = ''
-  dishForm.description = ''
-  dishForm.basePrice = 0
-  dishForm.sortOrder = 0
+const dishModalTitle = computed(() => (editingDishId.value ? 'Edit dish' : 'New dish'))
+
+function openDishModal(row?: DishRow) {
+  editingDishId.value = row?.id ?? null
+  dishForm.categoryId = row?.categoryId ?? menu.value.categories[0]?.id ?? ''
+  dishForm.name = row?.name ?? ''
+  dishForm.description = row?.description ?? ''
+  dishForm.basePrice = row?.basePrice ?? 0
+  dishForm.sortOrder = row?.sortOrder ?? 0
+  // Dish rows come from the public menu (always ACTIVE); safe default on edit.
   dishForm.status = 'ACTIVE'
   dishFormError.value = ''
   dishModalOpen.value = true
@@ -175,21 +197,31 @@ async function submitDish() {
   dishSaving.value = true
   dishFormError.value = ''
   try {
-    await menuApi.createDish({
+    const payload = {
       categoryId: dishForm.categoryId,
       name: dishForm.name,
       description: dishForm.description || undefined,
       basePrice: dishForm.basePrice,
       status: dishForm.status,
       sortOrder: dishForm.sortOrder,
-    })
+    }
+    if (editingDishId.value) {
+      await menuApi.updateDish(editingDishId.value, payload)
+    } else {
+      await menuApi.createDish(payload)
+    }
+    editingDishId.value = null
     dishModalOpen.value = false
     await loadMenu()
   } catch (caught) {
-    dishFormError.value = caught instanceof ApiError ? caught.message : 'We could not save this dish.'
+    dishFormError.value = messageOf(caught, 'We could not save this dish.')
   } finally {
     dishSaving.value = false
   }
+}
+
+function goToRecipe(dishId: string) {
+  router.push({ name: 'recipe', params: { dishId } })
 }
 
 // -- Archive (category or dish) ------------------------------------------
@@ -237,12 +269,25 @@ async function confirmArchive() {
     <section class="panel">
       <div class="panel-header">
         <h3>Categories</h3>
-        <button class="ghost-button" type="button" @click="openCategoryModal">New category</button>
+        <button v-if="isAdmin" class="ghost-button" type="button" @click="openCategoryModal()">New category</button>
       </div>
       <div class="tag-list">
         <span v-for="category in menu.categories" :key="category.id" class="tag-chip">
-          {{ category.name }}
-          <button type="button" :aria-label="`Archive ${category.name}`" @click="requestArchive('category', category.id, category.name)">
+          <button
+            v-if="isAdmin"
+            type="button"
+            :aria-label="`Edit ${category.name}`"
+            @click="openCategoryModal(category)"
+          >
+            {{ category.name }}
+          </button>
+          <template v-else>{{ category.name }}</template>
+          <button
+            v-if="isAdmin"
+            type="button"
+            :aria-label="`Archive ${category.name}`"
+            @click="requestArchive('category', category.id, category.name)"
+          >
             <X :size="12" />
           </button>
         </span>
@@ -258,7 +303,7 @@ async function confirmArchive() {
         </label>
       </template>
       <template #actions>
-        <button class="primary-button" type="button" @click="openDishModal">New dish</button>
+        <button v-if="isAdmin" class="primary-button" type="button" @click="openDishModal()">New dish</button>
       </template>
     </Toolbar>
 
@@ -275,8 +320,24 @@ async function confirmArchive() {
         <template #cell-basePrice="{ value }">{{ formatMoney(value as number) }}</template>
         <template #cell-actions="{ row }">
           <div class="table-actions">
-            <button class="ghost-button small" type="button" @click="requestArchive('dish', row.id as string, row.name as string)">
+            <button
+              v-if="isAdmin"
+              class="ghost-button small"
+              type="button"
+              @click="openDishModal(row as unknown as DishRow)"
+            >
+              Edit
+            </button>
+            <button
+              v-if="isAdmin"
+              class="ghost-button small"
+              type="button"
+              @click="requestArchive('dish', row.id as string, row.name as string)"
+            >
               Archive
+            </button>
+            <button v-if="isAdmin" class="ghost-button small" type="button" @click="goToRecipe(row.id as string)">
+              Recipe
             </button>
           </div>
         </template>
@@ -313,7 +374,7 @@ async function confirmArchive() {
       </div>
     </div>
 
-    <Modal :open="categoryModalOpen" title="New category" @close="categoryModalOpen = false">
+    <Modal :open="categoryModalOpen" :title="categoryModalTitle" @close="categoryModalOpen = false">
       <form class="field-grid" @submit.prevent="submitCategory">
         <label class="span-2">
           Name
@@ -345,7 +406,7 @@ async function confirmArchive() {
       </form>
     </Modal>
 
-    <Modal :open="dishModalOpen" title="New dish" @close="dishModalOpen = false">
+    <Modal :open="dishModalOpen" :title="dishModalTitle" @close="dishModalOpen = false">
       <form class="field-grid" @submit.prevent="submitDish">
         <label class="span-2">
           Category
