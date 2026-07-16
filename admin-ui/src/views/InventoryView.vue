@@ -86,25 +86,46 @@ const ingredientForm = reactive({ name: '', baseUnit: '', description: '', statu
 const ingredientSaving = ref(false)
 const ingredientFormError = ref('')
 const editingIngredientId = ref<string | null>(null)
+const ingredientDetailLoading = ref(false)
+const ingredientDetailFailed = ref(false)
 
 const ingredientModalTitle = computed(() => (editingIngredientId.value ? 'Edit ingredient' : 'New ingredient'))
 
-function openIngredientModal(row?: StockBalanceResponse) {
-  if (row) {
-    editingIngredientId.value = row.ingredientId
-    ingredientForm.name = row.ingredientName
-    ingredientForm.baseUnit = row.baseUnit
-    ingredientForm.description = ''
-    ingredientForm.status = row.ingredientStatus
-  } else {
+async function openIngredientModal(row?: StockBalanceResponse) {
+  ingredientFormError.value = ''
+  ingredientDetailFailed.value = false
+  if (!row) {
     editingIngredientId.value = null
     ingredientForm.name = ''
     ingredientForm.baseUnit = ''
     ingredientForm.description = ''
     ingredientForm.status = 'ACTIVE'
+    ingredientModalOpen.value = true
+    return
   }
-  ingredientFormError.value = ''
+
+  editingIngredientId.value = row.ingredientId
+  ingredientForm.name = row.ingredientName
+  ingredientForm.baseUnit = row.baseUnit
+  ingredientForm.description = ''
+  ingredientForm.status = row.ingredientStatus
   ingredientModalOpen.value = true
+
+  // updateIngredient is a PUT that replaces the whole resource — an omitted
+  // description is persisted as null. Stock rows carry no description, so it
+  // must be read from the ingredient record before the form can be saved;
+  // otherwise editing the name alone would silently wipe the description.
+  ingredientDetailLoading.value = true
+  try {
+    const ingredients = await inventoryApi.listIngredients()
+    const detail = ingredients.find((item) => item.ingredientId === row.ingredientId)
+    ingredientForm.description = detail?.description ?? ''
+  } catch (caught) {
+    ingredientDetailFailed.value = true
+    ingredientFormError.value = messageOf(caught, 'We could not load this ingredient. Saving is disabled to avoid overwriting its description.')
+  } finally {
+    ingredientDetailLoading.value = false
+  }
 }
 
 async function submitIngredient() {
@@ -400,8 +421,12 @@ const toggleLabel = computed(() => (lowStockOnly.value ? 'Show all ingredients' 
         <p v-if="ingredientFormError" class="form-error span-2">{{ ingredientFormError }}</p>
         <div class="modal-footer span-2">
           <button class="ghost-button" type="button" @click="ingredientModalOpen = false">Cancel</button>
-          <button class="primary-button" type="submit" :disabled="ingredientSaving">
-            {{ ingredientSaving ? 'Saving…' : 'Save changes' }}
+          <button
+            class="primary-button"
+            type="submit"
+            :disabled="ingredientSaving || ingredientDetailLoading || ingredientDetailFailed"
+          >
+            {{ ingredientSaving ? 'Saving…' : ingredientDetailLoading ? 'Loading…' : 'Save changes' }}
           </button>
         </div>
       </form>
