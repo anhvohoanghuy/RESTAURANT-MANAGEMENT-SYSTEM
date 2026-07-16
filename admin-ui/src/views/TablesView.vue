@@ -19,6 +19,7 @@ import {
   type TableStatus,
 } from '../api/modules'
 import { formatDateTime, messageOf, truncateId } from '../lib/format'
+import { isAdmin } from '../stores/auth'
 
 const loading = ref(true)
 const error = ref('')
@@ -142,11 +143,22 @@ const areaModalOpen = ref(false)
 const areaForm = reactive({ name: '', sortOrder: 0, status: 'ACTIVE' as TableStatus })
 const areaSaving = ref(false)
 const areaFormError = ref('')
+const editingAreaId = ref<string | null>(null)
 
-function openAreaModal() {
-  areaForm.name = ''
-  areaForm.sortOrder = 0
-  areaForm.status = 'ACTIVE'
+const areaModalTitle = computed(() => (editingAreaId.value ? 'Edit dining area' : 'New area'))
+
+function openAreaModal(row?: DiningAreaResponse) {
+  if (row) {
+    editingAreaId.value = row.id
+    areaForm.name = row.name
+    areaForm.sortOrder = row.sortOrder
+    areaForm.status = row.status
+  } else {
+    editingAreaId.value = null
+    areaForm.name = ''
+    areaForm.sortOrder = 0
+    areaForm.status = 'ACTIVE'
+  }
   areaFormError.value = ''
   areaModalOpen.value = true
 }
@@ -155,7 +167,13 @@ async function submitArea() {
   areaSaving.value = true
   areaFormError.value = ''
   try {
-    await tablesApi.createArea({ name: areaForm.name, sortOrder: areaForm.sortOrder, status: areaForm.status })
+    const payload = { name: areaForm.name, sortOrder: areaForm.sortOrder, status: areaForm.status }
+    if (editingAreaId.value) {
+      await tablesApi.updateArea(editingAreaId.value, payload)
+    } else {
+      await tablesApi.createArea(payload)
+    }
+    editingAreaId.value = null
     areaModalOpen.value = false
     await loadAll()
   } catch (caught) {
@@ -188,14 +206,28 @@ const tableForm = reactive({
 })
 const tableSaving = ref(false)
 const tableFormError = ref('')
+const editingTableId = ref<string | null>(null)
 
-function openTableModal() {
-  tableForm.areaId = areas.value[0]?.id ?? ''
-  tableForm.code = ''
-  tableForm.name = ''
-  tableForm.capacity = 2
-  tableForm.sortOrder = 0
-  tableForm.status = 'ACTIVE'
+const tableModalTitle = computed(() => (editingTableId.value ? 'Edit table' : 'New table'))
+
+function openTableModal(row?: DiningTableResponse) {
+  if (row) {
+    editingTableId.value = row.id
+    tableForm.areaId = row.areaId
+    tableForm.code = row.code
+    tableForm.name = row.name
+    tableForm.capacity = row.capacity ?? 2
+    tableForm.sortOrder = row.sortOrder
+    tableForm.status = row.status
+  } else {
+    editingTableId.value = null
+    tableForm.areaId = areas.value[0]?.id ?? ''
+    tableForm.code = ''
+    tableForm.name = ''
+    tableForm.capacity = 2
+    tableForm.sortOrder = 0
+    tableForm.status = 'ACTIVE'
+  }
   tableFormError.value = ''
   tableModalOpen.value = true
 }
@@ -208,14 +240,20 @@ async function submitTable() {
   tableSaving.value = true
   tableFormError.value = ''
   try {
-    await tablesApi.createTable({
+    const payload = {
       areaId: tableForm.areaId,
       code: tableForm.code,
       name: tableForm.name,
       capacity: tableForm.capacity,
       sortOrder: tableForm.sortOrder,
       status: tableForm.status,
-    })
+    }
+    if (editingTableId.value) {
+      await tablesApi.updateTable(editingTableId.value, payload)
+    } else {
+      await tablesApi.createTable(payload)
+    }
+    editingTableId.value = null
     tableModalOpen.value = false
     await loadAll()
   } catch (caught) {
@@ -362,12 +400,20 @@ const reservationColumns: DataTableColumn[] = [
     <section class="panel">
       <div class="panel-header">
         <h3>Dining areas</h3>
-        <button class="ghost-button" type="button" @click="openAreaModal">New area</button>
+        <button v-if="isAdmin" class="ghost-button" type="button" @click="openAreaModal()">New area</button>
       </div>
       <div class="tag-list">
         <span v-for="area in areas" :key="area.id" class="tag-chip">
-          {{ area.name }}
-          <button type="button" :aria-label="`Archive ${area.name}`" @click="archiveArea(area.id)">×</button>
+          <button
+            v-if="isAdmin"
+            type="button"
+            :aria-label="`Edit ${area.name}`"
+            @click="openAreaModal(area)"
+          >
+            {{ area.name }}
+          </button>
+          <template v-else>{{ area.name }}</template>
+          <button v-if="isAdmin" type="button" :aria-label="`Archive ${area.name}`" @click="archiveArea(area.id)">×</button>
         </span>
         <span v-if="!areas.length && !loading" class="field-hint">No dining areas yet.</span>
       </div>
@@ -375,7 +421,7 @@ const reservationColumns: DataTableColumn[] = [
 
     <Toolbar>
       <template #actions>
-        <button class="ghost-button" type="button" @click="openTableModal">New table</button>
+        <button v-if="isAdmin" class="ghost-button" type="button" @click="openTableModal()">New table</button>
         <button class="primary-button" type="button" @click="openReservationModal">New reservation</button>
       </template>
     </Toolbar>
@@ -442,13 +488,18 @@ const reservationColumns: DataTableColumn[] = [
           <StatusBadge :status="value as string" />
         </template>
         <template #cell-actions="{ row }">
-          <button
-            class="ghost-button small"
-            type="button"
-            @click="archiveTableTarget = { id: row.id as string, label: `${row.code} — ${row.name}` }"
-          >
-            Archive
-          </button>
+          <div v-if="isAdmin" class="table-actions">
+            <button class="ghost-button small" type="button" @click="openTableModal(row as DiningTableResponse)">
+              Edit
+            </button>
+            <button
+              class="ghost-button small"
+              type="button"
+              @click="archiveTableTarget = { id: row.id as string, label: `${row.code} — ${row.name}` }"
+            >
+              Archive
+            </button>
+          </div>
         </template>
       </DataTable>
     </section>
@@ -526,7 +577,7 @@ const reservationColumns: DataTableColumn[] = [
       </form>
     </Modal>
 
-    <Modal :open="areaModalOpen" title="New dining area" @close="areaModalOpen = false">
+    <Modal :open="areaModalOpen" :title="areaModalTitle" @close="areaModalOpen = false">
       <form class="field-grid" @submit.prevent="submitArea">
         <label class="span-2">
           Name
@@ -554,7 +605,7 @@ const reservationColumns: DataTableColumn[] = [
       </form>
     </Modal>
 
-    <Modal :open="tableModalOpen" title="New table" @close="tableModalOpen = false">
+    <Modal :open="tableModalOpen" :title="tableModalTitle" @close="tableModalOpen = false">
       <form class="field-grid" @submit.prevent="submitTable">
         <label class="span-2">
           Area
