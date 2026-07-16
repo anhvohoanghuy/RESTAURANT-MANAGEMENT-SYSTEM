@@ -34,3 +34,6 @@ build/
 
 ### Environment ###
 .env
+
+### GSD planning docs — synced via separate private repo, see .planning/README-SYNC.md ###
+/.planning/
