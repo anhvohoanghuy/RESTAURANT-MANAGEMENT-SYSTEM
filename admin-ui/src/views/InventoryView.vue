@@ -8,6 +8,7 @@ import StatusBadge from '../components/StatusBadge.vue'
 import Toolbar from '../components/Toolbar.vue'
 import {
   inventoryApi,
+  type IngredientCostResponse,
   type IngredientStatus,
   type InventoryMovementType,
   type StockBalanceResponse,
@@ -256,6 +257,51 @@ async function submitCost() {
   }
 }
 
+// -- Cost history (read-only) --------------------------------------------
+
+const costHistoryModalOpen = ref(false)
+const costHistoryTargetId = ref('')
+const costHistoryTargetName = ref('')
+const costHistoryLoading = ref(false)
+const costHistoryError = ref('')
+const costHistory = ref<IngredientCostResponse[]>([])
+
+const costHistoryColumns: DataTableColumn[] = [
+  { key: 'unitCost', label: 'Unit cost' },
+  { key: 'costUnit', label: 'Cost unit' },
+  { key: 'effectiveAt', label: 'Effective at' },
+  { key: 'source', label: 'Source' },
+  { key: 'note', label: 'Note' },
+  { key: 'createdAt', label: 'Created at' },
+]
+
+async function loadCostHistory(ingredientId: string) {
+  costHistoryLoading.value = true
+  costHistoryError.value = ''
+  try {
+    costHistory.value = await inventoryApi.listCosts(ingredientId)
+  } catch (caught) {
+    costHistoryError.value = messageOf(caught, 'We could not load this data.')
+  } finally {
+    costHistoryLoading.value = false
+  }
+}
+
+function openCostHistory(row: StockBalanceResponse) {
+  costHistoryTargetId.value = row.ingredientId
+  costHistoryTargetName.value = row.ingredientName
+  costHistoryModalOpen.value = true
+  loadCostHistory(row.ingredientId)
+}
+
+function retryCostHistory() {
+  if (costHistoryTargetId.value) {
+    loadCostHistory(costHistoryTargetId.value)
+  }
+}
+
+const costHistoryModalTitle = computed(() => `Cost history — ${costHistoryTargetName.value}`)
+
 const toggleLabel = computed(() => (lowStockOnly.value ? 'Show all ingredients' : 'Show low-stock only'))
 </script>
 
@@ -302,6 +348,7 @@ const toggleLabel = computed(() => (lowStockOnly.value ? 'Show all ingredients' 
           <div class="table-actions">
             <button class="ghost-button small" type="button" @click="openIngredientModal(row as any)">Edit</button>
             <button class="ghost-button small" type="button" @click="openCostModal(row as any)">Add cost</button>
+            <button class="ghost-button small" type="button" @click="openCostHistory(row as any)">View costs</button>
             <button
               class="ghost-button small"
               type="button"
@@ -428,6 +475,22 @@ const toggleLabel = computed(() => (lowStockOnly.value ? 'Show all ingredients' 
           </button>
         </div>
       </form>
+    </Modal>
+
+    <Modal :open="costHistoryModalOpen" :title="costHistoryModalTitle" @close="costHistoryModalOpen = false">
+      <EmptyState v-if="costHistoryError" tone="error" :body="costHistoryError" @retry="retryCostHistory" />
+      <div v-else-if="costHistoryLoading" class="skeleton-table" />
+      <DataTable
+        v-else
+        :columns="costHistoryColumns"
+        :rows="costHistory"
+        row-key="costId"
+        empty-text="No cost records yet."
+      >
+        <template #cell-unitCost="{ value }">{{ formatMoney(value as number) }}</template>
+        <template #cell-effectiveAt="{ value }">{{ formatDateTime(value as string) }}</template>
+        <template #cell-createdAt="{ value }">{{ formatDateTime(value as string) }}</template>
+      </DataTable>
     </Modal>
 
     <ConfirmDialog
