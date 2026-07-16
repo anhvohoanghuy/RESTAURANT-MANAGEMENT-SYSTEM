@@ -360,17 +360,87 @@ async function seatReservation(reservationId: string) {
   }
 }
 
-async function cancelReservation(reservationId: string) {
-  actionError.value = ''
+const RESERVATION_TARGET_STATUSES: ReservationStatus[] = ['CONFIRMED', 'NO_SHOW', 'COMPLETED', 'CANCELLED']
+
+const reservationStatusModal = reactive({
+  open: false,
+  reservationId: '',
+  currentStatus: 'PENDING' as ReservationStatus,
+  nextStatus: 'CONFIRMED' as ReservationStatus,
+  note: '',
+  saving: false,
+  error: '',
+})
+
+const reservationStatusOptions = computed(() =>
+  RESERVATION_TARGET_STATUSES.filter((status) => status !== reservationStatusModal.currentStatus),
+)
+
+function openReservationStatusModal(row: TableReservationResponse) {
+  reservationStatusModal.reservationId = row.reservationId
+  reservationStatusModal.currentStatus = row.status
+  const options = RESERVATION_TARGET_STATUSES.filter((status) => status !== row.status)
+  reservationStatusModal.nextStatus = options[0] ?? 'CONFIRMED'
+  reservationStatusModal.note = ''
+  reservationStatusModal.error = ''
+  reservationStatusModal.open = true
+}
+
+const reservationStatusConfirmTarget = ref<ReservationStatus | null>(null)
+const reservationStatusConfirmPending = ref(false)
+
+async function applyReservationStatus(status: ReservationStatus) {
+  reservationStatusModal.saving = true
+  reservationStatusModal.error = ''
   try {
-    const updated = await tablesApi.updateReservationStatus(reservationId, { status: 'CANCELLED' })
+    const updated = await tablesApi.updateReservationStatus(reservationStatusModal.reservationId, {
+      status,
+      note: reservationStatusModal.note || undefined,
+    })
     reservationsCreated.value = reservationsCreated.value.map((reservation) =>
-      reservation.reservationId === reservationId ? updated : reservation,
+      reservation.reservationId === reservationStatusModal.reservationId ? updated : reservation,
     )
+    reservationStatusModal.open = false
+    reservationStatusConfirmTarget.value = null
   } catch (caught) {
-    actionError.value = messageOf(caught, 'We could not cancel this reservation.')
+    reservationStatusModal.error = messageOf(caught, 'We could not update this reservation.')
+  } finally {
+    reservationStatusModal.saving = false
+    reservationStatusConfirmPending.value = false
   }
 }
+
+function submitReservationStatus() {
+  if (reservationStatusModal.nextStatus === 'CANCELLED' || reservationStatusModal.nextStatus === 'NO_SHOW') {
+    reservationStatusModal.open = false
+    reservationStatusConfirmTarget.value = reservationStatusModal.nextStatus
+    return
+  }
+  void applyReservationStatus(reservationStatusModal.nextStatus)
+}
+
+async function confirmReservationStatus() {
+  if (!reservationStatusConfirmTarget.value) {
+    return
+  }
+  reservationStatusConfirmPending.value = true
+  await applyReservationStatus(reservationStatusConfirmTarget.value)
+}
+
+const reservationStatusConfirmCopy = computed(() => {
+  if (reservationStatusConfirmTarget.value === 'NO_SHOW') {
+    return {
+      title: 'Mark no-show',
+      message: 'Mark this reservation as NO_SHOW? This cannot be undone.',
+      confirmLabel: 'Mark no-show',
+    }
+  }
+  return {
+    title: 'Cancel reservation',
+    message: 'Mark this reservation as CANCELLED? This cannot be undone.',
+    confirmLabel: 'Cancel reservation',
+  }
+})
 
 const reservationColumns: DataTableColumn[] = [
   { key: 'reservationId', label: 'Reservation', mono: true },
@@ -533,9 +603,9 @@ const reservationColumns: DataTableColumn[] = [
               v-if="!['CANCELLED', 'SEATED', 'COMPLETED', 'NO_SHOW'].includes(row.status as string)"
               class="ghost-button small"
               type="button"
-              @click="cancelReservation(row.reservationId as string)"
+              @click="openReservationStatusModal(row as TableReservationResponse)"
             >
-              Cancel
+              Status
             </button>
           </div>
         </template>
@@ -693,6 +763,32 @@ const reservationColumns: DataTableColumn[] = [
       </form>
     </Modal>
 
+    <Modal
+      :open="reservationStatusModal.open"
+      title="Update reservation status"
+      @close="reservationStatusModal.open = false"
+    >
+      <form class="field-grid" @submit.prevent="submitReservationStatus">
+        <label class="span-2">
+          Status
+          <select v-model="reservationStatusModal.nextStatus">
+            <option v-for="status in reservationStatusOptions" :key="status" :value="status">{{ status }}</option>
+          </select>
+        </label>
+        <label class="span-2">
+          Note
+          <input v-model="reservationStatusModal.note" />
+        </label>
+        <p v-if="reservationStatusModal.error" class="form-error span-2">{{ reservationStatusModal.error }}</p>
+        <div class="modal-footer span-2">
+          <button class="ghost-button" type="button" @click="reservationStatusModal.open = false">Cancel</button>
+          <button class="primary-button" type="submit" :disabled="reservationStatusModal.saving">
+            {{ reservationStatusModal.saving ? 'Saving…' : 'Update status' }}
+          </button>
+        </div>
+      </form>
+    </Modal>
+
     <ConfirmDialog
       :open="Boolean(archiveTableTarget)"
       title="Confirm action"
@@ -702,6 +798,17 @@ const reservationColumns: DataTableColumn[] = [
       :pending="archiveTablePending"
       @close="archiveTableTarget = null"
       @confirm="confirmArchiveTable"
+    />
+
+    <ConfirmDialog
+      :open="Boolean(reservationStatusConfirmTarget)"
+      :title="reservationStatusConfirmCopy.title"
+      :message="reservationStatusConfirmCopy.message"
+      :confirm-label="reservationStatusConfirmCopy.confirmLabel"
+      danger
+      :pending="reservationStatusConfirmPending"
+      @close="reservationStatusConfirmTarget = null"
+      @confirm="confirmReservationStatus"
     />
   </section>
 </template>
