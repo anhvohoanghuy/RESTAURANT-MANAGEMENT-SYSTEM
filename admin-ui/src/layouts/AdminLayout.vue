@@ -8,6 +8,7 @@ import {
   Menu as MenuIcon,
   Package,
   ReceiptText,
+  ShieldCheck,
   Soup,
   Utensils,
 } from '@lucide/vue'
@@ -28,6 +29,7 @@ const navItems = [
   { to: '/payments', label: 'Payments', icon: CreditCard },
   { to: '/kitchen', label: 'Kitchen', icon: Soup },
   { to: '/orders', label: 'Orders', icon: ClipboardList },
+  { to: '/sessions', label: 'Sessions', icon: ShieldCheck },
 ]
 
 const pageTitle = computed(() => navItems.find((item) => item.to === route.path)?.label ?? 'Admin')

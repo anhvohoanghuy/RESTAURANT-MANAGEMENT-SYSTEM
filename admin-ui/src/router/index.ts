@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AdminLayout from '../layouts/AdminLayout.vue'
-import { isAuthenticated } from '../stores/auth'
+import { authState, isAuthenticated } from '../stores/auth'
 import LoginView from '../views/LoginView.vue'
 import OverviewView from '../views/OverviewView.vue'
 import MenuView from '../views/MenuView.vue'
@@ -9,6 +9,8 @@ import InventoryView from '../views/InventoryView.vue'
 import PaymentsView from '../views/PaymentsView.vue'
 import KitchenView from '../views/KitchenView.vue'
 import OrdersView from '../views/OrdersView.vue'
+import RecipeView from '../views/RecipeView.vue'
+import SessionsView from '../views/SessionsView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -26,6 +28,8 @@ export const router = createRouter({
         { path: 'payments', name: 'payments', component: PaymentsView },
         { path: 'kitchen', name: 'kitchen', component: KitchenView },
         { path: 'orders', name: 'orders', component: OrdersView },
+        { path: 'menu/dishes/:dishId/recipe', name: 'recipe', component: RecipeView, meta: { adminOnly: true } },
+        { path: 'sessions', name: 'sessions', component: SessionsView },
       ],
     },
   ],
@@ -37,6 +41,9 @@ router.beforeEach((to) => {
   }
   if (to.name === 'login' && isAuthenticated()) {
     return { name: 'overview' }
+  }
+  if (to.meta.adminOnly && !authState.roles.includes('ADMIN')) {
+    return { name: 'menu' }
   }
   return true
 })
