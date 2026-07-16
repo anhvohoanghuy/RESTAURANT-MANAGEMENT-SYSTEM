@@ -15,7 +15,9 @@ import {
   type MenuCostingItem,
   type MenuStatus,
   type PublicCategory,
+  type PublicDish,
   type PublicMenuResponse,
+  type PublicToppingGroup,
 } from '../api/modules'
 import { isAdmin } from '../stores/auth'
 import { formatMoney, formatPercent, messageOf } from '../lib/format'
@@ -224,12 +226,93 @@ function goToRecipe(dishId: string) {
   router.push({ name: 'recipe', params: { dishId } })
 }
 
-// -- Archive (category or dish) ------------------------------------------
+// -- Topping groups + options (create + archive only; no backend PUT) -----
 
-const confirmTarget = ref<{ kind: 'category' | 'dish'; id: string; name: string } | null>(null)
+const toppingGroupModalOpen = ref(false)
+const toppingGroupForm = reactive({ dishId: '', dishName: '', name: '', minSelections: 1, maxSelections: 1, sortOrder: 0 })
+const toppingGroupSaving = ref(false)
+const toppingGroupFormError = ref('')
+
+function openToppingGroupModal(dish: PublicDish) {
+  toppingGroupForm.dishId = dish.id
+  toppingGroupForm.dishName = dish.name
+  toppingGroupForm.name = ''
+  toppingGroupForm.minSelections = 1
+  toppingGroupForm.maxSelections = 1
+  toppingGroupForm.sortOrder = 0
+  toppingGroupFormError.value = ''
+  toppingGroupModalOpen.value = true
+}
+
+async function submitToppingGroup() {
+  toppingGroupSaving.value = true
+  toppingGroupFormError.value = ''
+  try {
+    await menuApi.createToppingGroup({
+      dishId: toppingGroupForm.dishId,
+      name: toppingGroupForm.name,
+      minSelections: toppingGroupForm.minSelections,
+      maxSelections: toppingGroupForm.maxSelections,
+      sortOrder: toppingGroupForm.sortOrder,
+    })
+    toppingGroupModalOpen.value = false
+    await loadMenu()
+  } catch (caught) {
+    toppingGroupFormError.value = messageOf(caught, 'We could not save this topping group.')
+  } finally {
+    toppingGroupSaving.value = false
+  }
+}
+
+const toppingOptionModalOpen = ref(false)
+const toppingOptionForm = reactive({
+  toppingGroupId: '',
+  groupName: '',
+  name: '',
+  additionalPrice: 0,
+  status: 'ACTIVE' as MenuStatus,
+  sortOrder: 0,
+})
+const toppingOptionSaving = ref(false)
+const toppingOptionFormError = ref('')
+
+function openToppingOptionModal(group: PublicToppingGroup) {
+  toppingOptionForm.toppingGroupId = group.id
+  toppingOptionForm.groupName = group.name
+  toppingOptionForm.name = ''
+  toppingOptionForm.additionalPrice = 0
+  toppingOptionForm.status = 'ACTIVE'
+  toppingOptionForm.sortOrder = 0
+  toppingOptionFormError.value = ''
+  toppingOptionModalOpen.value = true
+}
+
+async function submitToppingOption() {
+  toppingOptionSaving.value = true
+  toppingOptionFormError.value = ''
+  try {
+    await menuApi.createToppingOption({
+      toppingGroupId: toppingOptionForm.toppingGroupId,
+      name: toppingOptionForm.name,
+      additionalPrice: toppingOptionForm.additionalPrice,
+      status: toppingOptionForm.status,
+      sortOrder: toppingOptionForm.sortOrder,
+    })
+    toppingOptionModalOpen.value = false
+    await loadMenu()
+  } catch (caught) {
+    toppingOptionFormError.value = messageOf(caught, 'We could not save this topping option.')
+  } finally {
+    toppingOptionSaving.value = false
+  }
+}
+
+// -- Archive (category, dish, or topping option) ---------------------------
+
+const confirmTarget = ref<{ kind: 'category' | 'dish' | 'toppingOption'; id: string; name: string } | null>(null)
 const confirmPending = ref(false)
 
-function requestArchive(kind: 'category' | 'dish', id: string, name: string) {
+function requestArchive(kind: 'category' | 'dish' | 'toppingOption', id: string, name: string) {
   confirmTarget.value = { kind, id, name }
 }
 
@@ -241,8 +324,10 @@ async function confirmArchive() {
   try {
     if (confirmTarget.value.kind === 'category') {
       await menuApi.archiveCategory(confirmTarget.value.id)
-    } else {
+    } else if (confirmTarget.value.kind === 'dish') {
       await menuApi.archiveDish(confirmTarget.value.id)
+    } else {
+      await menuApi.archiveToppingOption(confirmTarget.value.id)
     }
     confirmTarget.value = null
     await loadMenu()
@@ -363,16 +448,67 @@ async function confirmArchive() {
       </DataTable>
     </section>
 
-    <div class="notice-panel">
-      <div>
-        <h3>Topping groups, options, and recipes</h3>
-        <p>
-          Create/update endpoints for topping groups, topping options, and dish recipes are wired through
-          <code>menuApi</code>, but a dedicated editor UI is deferred to a follow-up admin polish pass. Use the
-          API directly, or extend this view, until that lands.
-        </p>
+    <section class="panel">
+      <div class="panel-header">
+        <h3>Topping groups & options</h3>
       </div>
-    </div>
+      <div v-for="category in menu.categories" :key="`toppings-${category.id}`">
+        <div
+          v-for="dish in category.dishes"
+          :key="`toppings-dish-${dish.id}`"
+          style="display: grid; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px"
+        >
+          <div class="panel-header">
+            <h3>{{ dish.name }}</h3>
+            <button
+              v-if="isAdmin"
+              class="ghost-button small"
+              type="button"
+              @click="openToppingGroupModal(dish)"
+            >
+              New group
+            </button>
+          </div>
+          <span v-if="!dish.toppingGroups.length" class="field-hint">No topping groups yet.</span>
+          <div
+            v-for="group in dish.toppingGroups"
+            :key="group.id"
+            style="display: grid; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px"
+          >
+            <div class="panel-header">
+              <h3>
+                {{ group.name }}
+                <StatusBadge tone="info">{{ group.minSelections }}–{{ group.maxSelections }} selections</StatusBadge>
+              </h3>
+              <button
+                v-if="isAdmin"
+                class="ghost-button small"
+                type="button"
+                @click="openToppingOptionModal(group)"
+              >
+                New option
+              </button>
+            </div>
+            <div class="tag-list">
+              <span v-for="option in group.options" :key="option.id" class="tag-chip">
+                {{ option.name }} (+{{ formatMoney(option.additionalPrice) }})
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  :aria-label="`Archive ${option.name}`"
+                  @click="requestArchive('toppingOption', option.id, option.name)"
+                >
+                  <X :size="12" />
+                </button>
+              </span>
+              <span v-if="!group.options.length" class="field-hint">No options yet.</span>
+            </div>
+          </div>
+        </div>
+        <span v-if="!category.dishes.length" class="field-hint">No dishes yet.</span>
+      </div>
+      <span v-if="!menu.categories.length && !loading" class="field-hint">No categories yet.</span>
+    </section>
 
     <Modal :open="categoryModalOpen" :title="categoryModalTitle" @close="categoryModalOpen = false">
       <form class="field-grid" @submit.prevent="submitCategory">
@@ -445,6 +581,66 @@ async function confirmArchive() {
           <button class="ghost-button" type="button" @click="dishModalOpen = false">Cancel</button>
           <button class="primary-button" type="submit" :disabled="dishSaving">
             {{ dishSaving ? 'Saving…' : 'Save changes' }}
+          </button>
+        </div>
+      </form>
+    </Modal>
+
+    <Modal :open="toppingGroupModalOpen" :title="`New topping group — ${toppingGroupForm.dishName}`" @close="toppingGroupModalOpen = false">
+      <form class="field-grid" @submit.prevent="submitToppingGroup">
+        <label class="span-2">
+          Name
+          <input v-model="toppingGroupForm.name" required />
+        </label>
+        <label>
+          Min selections
+          <input v-model.number="toppingGroupForm.minSelections" type="number" min="0" required />
+        </label>
+        <label>
+          Max selections
+          <input v-model.number="toppingGroupForm.maxSelections" type="number" min="0" required />
+        </label>
+        <label>
+          Sort order
+          <input v-model.number="toppingGroupForm.sortOrder" type="number" />
+        </label>
+        <p v-if="toppingGroupFormError" class="form-error span-2">{{ toppingGroupFormError }}</p>
+        <div class="modal-footer span-2">
+          <button class="ghost-button" type="button" @click="toppingGroupModalOpen = false">Cancel</button>
+          <button class="primary-button" type="submit" :disabled="toppingGroupSaving">
+            {{ toppingGroupSaving ? 'Saving…' : 'Save changes' }}
+          </button>
+        </div>
+      </form>
+    </Modal>
+
+    <Modal :open="toppingOptionModalOpen" :title="`New topping option — ${toppingOptionForm.groupName}`" @close="toppingOptionModalOpen = false">
+      <form class="field-grid" @submit.prevent="submitToppingOption">
+        <label class="span-2">
+          Name
+          <input v-model="toppingOptionForm.name" required />
+        </label>
+        <label>
+          Additional price
+          <input v-model.number="toppingOptionForm.additionalPrice" type="number" step="0.01" min="0" required />
+        </label>
+        <label>
+          Status
+          <select v-model="toppingOptionForm.status">
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="INACTIVE">INACTIVE</option>
+            <option value="ARCHIVED">ARCHIVED</option>
+          </select>
+        </label>
+        <label>
+          Sort order
+          <input v-model.number="toppingOptionForm.sortOrder" type="number" />
+        </label>
+        <p v-if="toppingOptionFormError" class="form-error span-2">{{ toppingOptionFormError }}</p>
+        <div class="modal-footer span-2">
+          <button class="ghost-button" type="button" @click="toppingOptionModalOpen = false">Cancel</button>
+          <button class="primary-button" type="submit" :disabled="toppingOptionSaving">
+            {{ toppingOptionSaving ? 'Saving…' : 'Save changes' }}
           </button>
         </div>
       </form>
