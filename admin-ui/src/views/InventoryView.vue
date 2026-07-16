@@ -84,12 +84,24 @@ const ingredientModalOpen = ref(false)
 const ingredientForm = reactive({ name: '', baseUnit: '', description: '', status: 'ACTIVE' as IngredientStatus })
 const ingredientSaving = ref(false)
 const ingredientFormError = ref('')
+const editingIngredientId = ref<string | null>(null)
 
-function openIngredientModal() {
-  ingredientForm.name = ''
-  ingredientForm.baseUnit = ''
-  ingredientForm.description = ''
-  ingredientForm.status = 'ACTIVE'
+const ingredientModalTitle = computed(() => (editingIngredientId.value ? 'Edit ingredient' : 'New ingredient'))
+
+function openIngredientModal(row?: StockBalanceResponse) {
+  if (row) {
+    editingIngredientId.value = row.ingredientId
+    ingredientForm.name = row.ingredientName
+    ingredientForm.baseUnit = row.baseUnit
+    ingredientForm.description = ''
+    ingredientForm.status = row.ingredientStatus
+  } else {
+    editingIngredientId.value = null
+    ingredientForm.name = ''
+    ingredientForm.baseUnit = ''
+    ingredientForm.description = ''
+    ingredientForm.status = 'ACTIVE'
+  }
   ingredientFormError.value = ''
   ingredientModalOpen.value = true
 }
@@ -98,12 +110,18 @@ async function submitIngredient() {
   ingredientSaving.value = true
   ingredientFormError.value = ''
   try {
-    await inventoryApi.createIngredient({
+    const payload = {
       name: ingredientForm.name,
       baseUnit: ingredientForm.baseUnit,
       description: ingredientForm.description || undefined,
       status: ingredientForm.status,
-    })
+    }
+    if (editingIngredientId.value) {
+      await inventoryApi.updateIngredient(editingIngredientId.value, payload)
+    } else {
+      await inventoryApi.createIngredient(payload)
+    }
+    editingIngredientId.value = null
     ingredientModalOpen.value = false
     await loadStock()
   } catch (caught) {
@@ -259,7 +277,7 @@ const toggleLabel = computed(() => (lowStockOnly.value ? 'Show all ingredients' 
         <button class="ghost-button" type="button" @click="toggleLowStock">{{ toggleLabel }}</button>
       </template>
       <template #actions>
-        <button class="ghost-button" type="button" @click="openIngredientModal">New ingredient</button>
+        <button class="ghost-button" type="button" @click="openIngredientModal()">New ingredient</button>
         <button class="primary-button" type="button" @click="openMovementModal">Record movement</button>
       </template>
     </Toolbar>
@@ -282,6 +300,7 @@ const toggleLabel = computed(() => (lowStockOnly.value ? 'Show all ingredients' 
         </template>
         <template #cell-actions="{ row }">
           <div class="table-actions">
+            <button class="ghost-button small" type="button" @click="openIngredientModal(row as any)">Edit</button>
             <button class="ghost-button small" type="button" @click="openCostModal(row as any)">Add cost</button>
             <button
               class="ghost-button small"
@@ -310,7 +329,7 @@ const toggleLabel = computed(() => (lowStockOnly.value ? 'Show all ingredients' 
       </DataTable>
     </section>
 
-    <Modal :open="ingredientModalOpen" title="New ingredient" @close="ingredientModalOpen = false">
+    <Modal :open="ingredientModalOpen" :title="ingredientModalTitle" @close="ingredientModalOpen = false">
       <form class="field-grid" @submit.prevent="submitIngredient">
         <label class="span-2">
           Name
